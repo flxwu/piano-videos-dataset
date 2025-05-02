@@ -13,6 +13,7 @@ Quick usage
 """
 
 import argparse
+import copy
 import bpy
 import math
 from pathlib import Path
@@ -20,6 +21,13 @@ from mathutils import Euler
 from math import pi, radians
 import sys
 import os
+
+# Add the project directory to Blender's sys.path to import utils
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_DIR not in sys.path:
+    sys.path.append(PROJECT_DIR)
+
+from utils import camera, lamp, render_to_video
 
 
 # -------------------------------------------------------------------
@@ -53,10 +61,11 @@ ORANGE = (1.0, 0.5, 0.0, 1.0)  # <- highlight colour
 # ---------------------------------------------------------
 try:
     import mido
+    import midi2audio
 except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
-        "The 'mido' library is required for MIDI import. "
-        "Install inside Blender’s Python with: pip install mido"
+        "The 'mido' and 'midi2audio' libraries are required. "
+        "Install inside Blender's Python with: pip install mido midi2audio"
     ) from exc
 
 
@@ -209,6 +218,20 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
         mat.keyframe_insert("diffuse_color", frame=0)
 
     current_sec = 0.0
+    # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
+    
+    # --- CREATE NEW MIDI FILE WITH TICKS PER BEAT
+    new_mid  = mido.MidiFile(ticks_per_beat=mid.ticks_per_beat)
+    new_track = mido.MidiTrack()
+    new_mid.tracks.append(new_track)
+
+    current_abs_sec   = 0.0                # absolute time while we read
+    last_quantised_sec = FIRST_FRAME / FPS # where the very first message will land
+
+    # default tempo until we see the first set_tempo meta
+    tempo = mido.bpm2tempo(120)            # 500 000 μs per quarter
+    # ---
+    
     for msg in mid:
         current_sec += msg.time
         frame = FIRST_FRAME + round(current_sec * fps)
@@ -243,96 +266,66 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
                 mat = obj.active_material
                 mat.diffuse_color = ORANGE if on else neutral_colour[obj.name]
                 mat.keyframe_insert("diffuse_color", frame=free_frame)
+            
+            # ==== COPY TO NEW MIDI FILE ====
+            quantised_sec  = free_frame / FPS
+            delta_sec  = quantised_sec - last_quantised_sec
+            last_quantised_sec = quantised_sec
+            # Convert the delta *seconds* → *ticks* expected by the writer
+            delta_ticks = round(
+                mido.second2tick(delta_sec,
+                                mid.ticks_per_beat,
+                                tempo)
+            )
+            # It must be a non-negative int
+            delta_ticks = max(0, int(delta_ticks))
+            # Copy the message so the original stays intact
+            new_msg = copy.deepcopy(msg)
+            new_msg.time = delta_ticks
+            new_track.append(new_msg)
+            # =============================
+        # Keep track of tempo changes so conversion stays correct
+        if msg.type == 'set_tempo':
+            tempo = msg.tempo
 
     for i in bpy.data.actions:
         for fcu in i.fcurves:
             for pt in fcu.keyframe_points:
                 pt.interpolation = "CONSTANT"
 
-    print(f"Imported MIDI: {midi_path.name}")
+    curr_path = Path(os.path.abspath(__file__)).parent
+    new_mid.save(curr_path / "temp_render/midi_audio.mid")
+    WAV = midi_to_wav(curr_path / "temp_render/midi_audio.mid")
+    add_audio_strip(WAV)
+    print(f"[INFO] Imported MIDI: {midi_path.name}")
 
-
-def camera(location, rotation):
-    bpy.ops.object.add(type="CAMERA", location=location)
-    cam = bpy.context.object
-    cam.rotation_euler = Euler(
-        (radians(rotation[0]), radians(rotation[1]), radians(rotation[2])), "XYZ"
-    )
-    cam.data.lens = 12
-    bpy.context.scene.camera = cam
-    return cam
-
-
-# https://docs.blender.org/manual/en/latest/render/lights/light_object.html#sun-light
-def lamp(location, type="SUN", energy=1, color=(1, 1, 1), target=None):
-    # Lamp types: 'POINT', 'SUN', 'SPOT', 'HEMI', 'AREA'
-    print("createLamp called")
-    bpy.ops.object.add(type="LIGHT", location=location)
-    obj = bpy.context.object
-    obj.data.type = type
-    obj.data.energy = energy
-    obj.data.color = color
-
-    # TODO: add target constraint
-    # if target:
-    #     trackToConstraint(obj, target)
-    return obj
 
 
 # -------------------------------------------------------------------
-# RENDER TO MP4  (call this once everything is animated)
+# MIDI ➜ WAV  (uses midi2audio)
 # -------------------------------------------------------------------
-def render_to_video(
-    output_path: str = "//piano_animation.mp4",
-    fps: int | None = None,
-    vcodec: str = "H264",
-    container: str = "MPEG4",
-    bitrate: int = 8000,
-):
-    """
-    Renders the current scene frame-range to a single MP4/H.264 file.
+def midi_to_wav(midi_path: str | Path,
+                wav_path: str = "//temp_render/midi_audio.wav"):
+    """Render *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""       
+    midi_path = Path(midi_path).expanduser()
+    wav_path  = Path(bpy.path.abspath(wav_path))
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
 
-    Parameters
-    ----------
-    output_path : str   Blender-style path, // is blend-file folder.
-    fps         : int   If given, overrides scene FPS before rendering.
-    vcodec      : str   FFmpeg video codec ID (H264, HEVC, PRORES, …).
-    container   : str   FFmpeg container (MPEG4, MATROSKA, QUICKTIME…).
-    bitrate     : int   kbit/s target; 0 = Blender default “Auto”.
-    """
-    sc = bpy.context.scene
-    render = sc.render
+    if wav_path.exists():
+        return wav_path           # skip if we rendered it already
 
-    # optional FPS override
-    if fps:
-        render.fps = fps
+    fs = midi2audio.FluidSynth()
+    fs.midi_to_audio(str(midi_path), str(wav_path))
+    return wav_path
 
-    # basic output
-    render.filepath = output_path
-    render.image_settings.file_format = "FFMPEG"  # ⬅ file type
-    render.image_settings.color_mode = "RGB"
-    render.image_settings.quality = 90  # default
-    render.ffmpeg.format = container  # mp4, mkv, …
-    render.ffmpeg.codec = vcodec  # H264, HEVC = H265
-    render.ffmpeg.constant_rate_factor = "MEDIUM"  # visual quality
-    render.ffmpeg.video_bitrate = bitrate
-    render.ffmpeg.gopsize = fps or sc.render.fps
-    render.ffmpeg.max_b_frames = 2
-    render.ffmpeg.use_max_b_frames = True
-    render.ffmpeg.audio_codec = (
-        "AAC"  # enable audio :contentReference[oaicite:7]{index=7}
-    )
-    render.ffmpeg.audio_bitrate = 192  # kb/s stereo
-    render.ffmpeg.audio_channels = "STEREO"
-
-    # make sure directory exists
-    Path(bpy.path.abspath(output_path)).parent.mkdir(parents=True, exist_ok=True)
-
-    print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
-    bpy.ops.render.render(
-        animation=True
-    )  # main call :contentReference[oaicite:1]{index=1}
-    print("Rendering finished")
+def add_audio_strip(wav_path: Path, channel: int = 1):
+    """Insert *wav_path* at frame-0 in the VSE; create the editor if absent."""
+    scn = bpy.context.scene
+    scn.sequence_editor_create()                       # ensures VSE exists
+    bpy.ops.sequencer.sound_strip_add(
+        filepath=str(wav_path),
+        frame_start=0,
+        channel=channel)                               
 
 
 # ---------------------------------------------------------
@@ -340,7 +333,7 @@ def render_to_video(
 # ---------------------------------------------------------
 
 
-def render_from_midi(MIDI_PATH: str, OUTPUT_PATH: str, highlight_presses=True):
+def render_from_midi(MIDI_PATH: str, OUTPUT_PATH: str, fps: int, highlight_presses=False):
     clear_scene()
 
     camera(location=(95, -15, 100), rotation=(15, 0, 0))
@@ -351,27 +344,27 @@ def render_from_midi(MIDI_PATH: str, OUTPUT_PATH: str, highlight_presses=True):
     if MIDI_PATH and Path(MIDI_PATH).exists():
         animate_from_midi(MIDI_PATH, highlight_presses)
     else:
-        print("No MIDI file provided - keyboard only.")
+        raise Exception("ERROR: No MIDI file provided.")
 
-    render_to_video(OUTPUT_PATH, fps=24)
+    render_to_video(output_path=OUTPUT_PATH, fps=fps)
 
 
 if __name__ == "__main__":
-    print(sys.version)
-    print(sys.executable)
-    print(os.getcwd())
+    print(f"[DEBUG]: {sys.version} | Executable {sys.executable} | Running in directory {os.getcwd()}")
     parser = argparse.ArgumentParser(prog="midi-to-piano", description="midi-to-piano")
-    parser.add_argument("-m", "--render", type=bool, help="", default=False)
     parser.add_argument(
-        "-m", "--midi", type=str, help="Path to an individual MIDI file", default=None
+        "-m", "--midi_path", type=str, help="Path to either a MIDI file, or a directory of MIDI files", default=None, required=True
     )
-    args = parser.parse_args()
-    RENDERING_FLAG = args.render
-    MIDI_PATH = args.midi
-    if RENDERING_FLAG == "1":
-        print(sys.argv)
-        render_from_midi(
-            MIDI_PATH,
-            f"//renders/{Path(MIDI_PATH).stem}.mp4",
-            highlight_presses=False,
-        )
+    parser.add_argument(
+        "-f", "--fps", type=str, help="FPS for the rendered video", default=24, required=False
+    )
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [] # blender passes script arguments after "--"
+    args = parser.parse_args(argv)
+    MIDI_PATH = args.midi_path
+    FPS = int(args.fps)
+    render_from_midi(
+        MIDI_PATH=MIDI_PATH,
+        OUTPUT_PATH=f"//renders/{Path(MIDI_PATH).stem}.mp4",
+        highlight_presses=False,
+        fps=FPS,
+    )
