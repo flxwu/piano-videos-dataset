@@ -12,6 +12,7 @@ Quick usage
 4. Press **Spacebar** to watch the playback.
 """
 
+import argparse
 import bpy
 import math
 from pathlib import Path
@@ -185,14 +186,12 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
 
     mid = mido.MidiFile(midi_path)
     fps = bpy.context.scene.render.fps or 24
-    ticks_per_beat = mid.ticks_per_beat
-    tempo = 500_000  # 120 BPM default
 
     key_cache = {
         o.name: o for o in bpy.data.objects if o.name.startswith(("White_", "Black_"))
     }
     # remember every frame already keyed for each key object
-    used_frames = {name: set() for name in key_cache}
+    used_frames: dict[str, set[int]] = {name: set() for name in key_cache}
 
     # --- put every key at rest on frame 0 ---------------------------
     for obj in key_cache.values():
@@ -214,10 +213,6 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
         current_sec += msg.time
         frame = FIRST_FRAME + round(current_sec * fps)
 
-        if msg.type == "set_tempo":
-            tempo = msg.tempo
-            continue
-
         if msg.type in {"note_on", "note_off"}:
             on = msg.type == "note_on" and msg.velocity > 0
             obj_name = midi_note_to_object_name(msg.note)
@@ -230,9 +225,9 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
             # If the frame-rate isn't very high, it's possible that we get a note_off and note_on for the same note within the period of 1 frame.
             # If this happens, we schedule the second event to the next frame, to prevent 'hiding this keypress' in the video.
             free_frame = frame
-            #            while free_frame in used_frames[obj.name]:      # already keyed?
-            #                free_frame += 1                             # bump one frame
-            #            used_frames[obj.name].add(free_frame)           # reserve it
+            while free_frame in used_frames[obj.name]:  # already keyed?
+                free_frame += 1  # bump one frame
+            used_frames[obj.name].add(free_frame)  # reserve it
             # ---------------------------------------------------------------
 
             print(
@@ -278,8 +273,9 @@ def lamp(location, type="SUN", energy=1, color=(1, 1, 1), target=None):
     obj.data.energy = energy
     obj.data.color = color
 
-    if target:
-        trackToConstraint(obj, target)
+    # TODO: add target constraint
+    # if target:
+    #     trackToConstraint(obj, target)
     return obj
 
 
@@ -355,7 +351,7 @@ def render_from_midi(MIDI_PATH: str, OUTPUT_PATH: str, highlight_presses=True):
     if MIDI_PATH and Path(MIDI_PATH).exists():
         animate_from_midi(MIDI_PATH, highlight_presses)
     else:
-        print("No MIDI file provided – keyboard only.")
+        print("No MIDI file provided - keyboard only.")
 
     render_to_video(OUTPUT_PATH, fps=24)
 
@@ -364,12 +360,18 @@ if __name__ == "__main__":
     print(sys.version)
     print(sys.executable)
     print(os.getcwd())
-    #    render_from_midi(r"/Users/felix/My Drive (david10608@gmail.com)/HiWi/twinkle.mid",
-    #        "//renders/twinkle.mp4", highlight_presses = False)
-    #    render_from_midi(r"/Users/felix/My Drive (david10608@gmail.com)/HiWi/bach-1.mid",
-    #        "//renders/twinkle.mp4", highlight_presses = True)
-    render_from_midi(
-        r"/Users/felix/My Drive (david10608@gmail.com)/HiWi/twinkle.mid",
-        "//renders/twinkle-no-buffering.mp4",
-        highlight_presses=False,
+    parser = argparse.ArgumentParser(prog="midi-to-piano", description="midi-to-piano")
+    parser.add_argument("-m", "--render", type=bool, help="", default=False)
+    parser.add_argument(
+        "-m", "--midi", type=str, help="Path to an individual MIDI file", default=None
     )
+    args = parser.parse_args()
+    RENDERING_FLAG = args.render
+    MIDI_PATH = args.midi
+    if RENDERING_FLAG == "1":
+        print(sys.argv)
+        render_from_midi(
+            MIDI_PATH,
+            f"//renders/{Path(MIDI_PATH).stem}.mp4",
+            highlight_presses=False,
+        )
