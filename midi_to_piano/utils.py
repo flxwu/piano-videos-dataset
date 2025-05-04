@@ -16,12 +16,12 @@ def camera(location, rotation):
 
 
 # https://docs.blender.org/manual/en/latest/render/lights/light_object.html#sun-light
-def lamp(location, type="SUN", energy=1, color=(1, 1, 1), target=None):
+def lamp(location, light_type="SUN", energy=1, color=(1, 1, 1), target=None):
     # Lamp types: 'POINT', 'SUN', 'SPOT', 'HEMI', 'AREA'
     print("[INFO]: Creating lamp")
     bpy.ops.object.add(type="LIGHT", location=location)
     obj = bpy.context.object
-    obj.data.type = type
+    obj.data.type = light_type
     obj.data.energy = energy
     obj.data.color = color
 
@@ -36,11 +36,11 @@ def lamp(location, type="SUN", energy=1, color=(1, 1, 1), target=None):
 # RENDER TO MP4  (call this once everything is animated)
 # -------------------------------------------------------------------
 def render_to_video(
-    output_path: str,
+    output_path: Path,
     fps: int | None = None,
-    vcodec: str = "H264",
-    container: str = "MPEG4",
     bitrate: int = 8000,
+    start_frame: int = 0,
+    end_frame: int = 250
 ):
     """
     Renders the current scene frame-range to a single MP4/H.264 file.
@@ -56,17 +56,23 @@ def render_to_video(
     sc = bpy.context.scene
     render = sc.render
 
+    # Assuming sc.render.engine == 'CYCLES'
+    sc.cycles.samples = 30
+
+    sc.frame_start = start_frame
+    sc.frame_end = end_frame
+
     # optional FPS override
     if fps:
         render.fps = fps
 
     # basic output
-    render.filepath = output_path
+    render.filepath = str(output_path)
     render.image_settings.file_format = "FFMPEG"  # ⬅ file type
     render.image_settings.color_mode = "RGB"
     render.image_settings.quality = 90  # default
-    render.ffmpeg.format = container  # mp4, mkv, …
-    render.ffmpeg.codec = vcodec  # H264, HEVC = H265
+    render.ffmpeg.format = "MPEG4"  # mp4, mkv, …
+    render.ffmpeg.codec = "H264"  # H264, HEVC = H265
     render.ffmpeg.constant_rate_factor = "MEDIUM"  # visual quality
     render.ffmpeg.video_bitrate = bitrate
     render.ffmpeg.gopsize = fps or sc.render.fps
@@ -80,10 +86,10 @@ def render_to_video(
 
 
     # make sure directory exists
-    Path(bpy.path.abspath(output_path)).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
     bpy.ops.render.render(
         animation=True
     )
-    print("Rendering finished")
+    print(f"▶  Rendering finished, saved to {output_path}")
