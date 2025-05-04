@@ -1,15 +1,18 @@
 import mido
 from pathlib import Path
 
+# MIDI_PATH = Path(
+#     __file__
+# ).parent / "bach-1.mid"
 MIDI_PATH = Path(
-    r"/Users/felix/My Drive (david10608@gmail.com)/HiWi/bach-2.mid"
-).expanduser()
+    __file__
+).parent / "midi_to_piano/temp_render/synthesized_bach-1.mid"
 
 midi_file = mido.MidiFile(MIDI_PATH)
 
 events = []
 abs_time = 0
-for msg in mido.MidiFile(MIDI_PATH):
+for msg in midi_file:
     abs_time += msg.time
     events.append((abs_time, msg))
 

@@ -18,16 +18,18 @@ import os
 import sys
 import math
 from pathlib import Path
+import midi2audio
+import mido
+import bpy # pylint: disable=import-error
 
-import bpy
 
 # Add the project directory to Blender's sys.path to import utils
 # TODO: Turn into a package
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
+from utils import camera, lamp, render_to_video # pylint: disable=import-error
 
-from utils import camera, lamp, render_to_video
 
 # -------------------------------------------------------------------
 # CONFIGURATION
@@ -46,7 +48,7 @@ KEY_DOWN_DEG = 7  # rotation when pressed (degrees)
 KEY_GAP = 0.3
 CLEAR_SCENE = True  # Set True to delete everything before building
 
-FIRST_FRAME = 1
+FIRST_FRAME = 0
 
 prefs = bpy.context.preferences
 prefs.edit.keyframe_new_interpolation_type = "LINEAR"
@@ -54,18 +56,6 @@ prefs.edit.keyframe_new_interpolation_type = "LINEAR"
 ORANGE = (1.0, 0.5, 0.0, 1.0)  # <- highlight colour
 
 # -------------------------------------------------------------------
-
-# ---------------------------------------------------------
-# CHECK DEPENDENCIES
-# ---------------------------------------------------------
-try:
-    import midi2audio
-    import mido
-except ModuleNotFoundError as exc:
-    raise ModuleNotFoundError(
-        "The 'mido' and 'midi2audio' libraries are required. "
-        "Install inside Blender's Python with: pip install mido midi2audio"
-    ) from exc
 
 
 def clear_scene():
@@ -230,7 +220,6 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     mid = mido.MidiFile(midi_path)
     fps = bpy.context.scene.render.fps or 24
 
-    current_sec = 0.0
     # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
     
     # --- CREATE NEW MIDI FILE WITH TICKS PER BEAT
@@ -239,8 +228,8 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     new_mid.tracks.append(new_track)
 
     current_sec   = 0.0                # absolute time while we read
-    last_quantised_sec = FIRST_FRAME / fps # where the very first message will land
-
+    # last_quantised_sec = FIRST_FRAME / fps # where the very first message will land
+    last_quantised_sec = 0.0
     # default tempo until we see the first set_tempo meta
     tempo = mido.bpm2tempo(120)            # 500 000 μs per quarter
     
@@ -285,7 +274,9 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
             
             # ==== COPY TO NEW MIDI FILE ====
             quantised_sec  = free_frame / fps
+            print(f"quantised_sec for frame {free_frame}: {quantised_sec}")
             delta_sec  = quantised_sec - last_quantised_sec
+            print(f"delta_sec for frame {free_frame}: {delta_sec}")
             last_quantised_sec = quantised_sec
             # Convert the delta *seconds* → *ticks* expected by the writer
             delta_ticks = round(
@@ -293,6 +284,7 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
                                 mid.ticks_per_beat,
                                 tempo)
             )
+            print(f"delta_ticks for frame {free_frame}: {delta_ticks}")
             # It must be a non-negative int
             delta_ticks = max(0, int(delta_ticks))
             # Copy the message so the original stays intact
@@ -303,6 +295,7 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
         # Keep track of tempo changes so conversion stays correct
         if msg.type == 'set_tempo':
             tempo = msg.tempo
+            new_track.append(msg)
 
     for i in bpy.data.actions:
         for fcu in i.fcurves:
@@ -388,7 +381,7 @@ def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_pre
     create_piano()
     last_frame = animate_from_midi(midi_path, highlight_presses, verbose)
 
-    render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=last_frame)
+    render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=last_frame + 10)
     # render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=250)
 
 

@@ -56,8 +56,10 @@ def render_to_video(
     sc = bpy.context.scene
     render = sc.render
 
-    # Assuming sc.render.engine == 'CYCLES'
+    # set the number of samples to 30 for all rendering engines (CYCLES and EEVEE)
     sc.cycles.samples = 30
+    sc.eevee.taa_render_samples = 30
+
 
     sc.frame_start = start_frame
     sc.frame_end = end_frame

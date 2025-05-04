@@ -1,3 +1,6 @@
+(0, MetaMessage('track_name', name='A.PIANO', time=0))
+(0, MetaMessage('time_signature', numerator=4, denominator=4, clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+(0, MetaMessage('set_tempo', tempo=588230, time=0))
 (0, Message('program_change', channel=0, program=0, time=0))
 (0.055146562499999996, Message('control_change', channel=0, control=121, value=0, time=0.055146562499999996))
 (0.07659244791666667, Message('note_on', channel=0, note=48, velocity=79, time=0.021445885416666664))
@@ -1426,3 +1429,4 @@
 (67.32782541666724, Message('control_change', channel=0, control=121, value=0, time=0.006127395833333333))
 (67.33088911458391, Message('control_change', channel=0, control=121, value=0, time=0.0030636979166666664))
 (67.33395281250058, Message('control_change', channel=0, control=121, value=0, time=0.0030636979166666664))
+(70.58760000000058, MetaMessage('end_of_track', time=3.2536471875))
