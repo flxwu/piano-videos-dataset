@@ -95,3 +95,12 @@ def render_to_video(
         animation=True
     )
     print(f"▶  Rendering finished, saved to {output_path}")
+
+def set_interpolation(interpolation: str) -> None:
+    """
+    Set the interpolation of all actions to the given interpolation.
+    """
+    for i in bpy.data.actions:
+        for fcu in i.fcurves:
+            for pt in fcu.keyframe_points:
+                pt.interpolation = interpolation

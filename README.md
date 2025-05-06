@@ -25,5 +25,10 @@ Then do
 blender -b --python midi_to_piano/render.py -- --midi_path bach-1.mid --output_dir renders
 ```
 
+Optional Flags:
+- --end_frame [number]
+- --fps [number]
+- --verbose
+- --highlight_presses [true/false]
 
 

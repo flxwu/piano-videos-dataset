@@ -29,7 +29,7 @@ import pretty_midi
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
-from utils import camera, lamp, render_to_video # pylint: disable=import-error
+from utils import camera, lamp, render_to_video, set_interpolation # pylint: disable=import-error
 
 
 # -------------------------------------------------------------------
@@ -222,30 +222,18 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     fps = bpy.context.scene.render.fps or 24
 
     # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
-    
-    # --- CREATE NEW MIDI FILE WITH TICKS PER BEAT
-    new_mid  = mido.MidiFile(ticks_per_beat=mid.ticks_per_beat)
-    new_track = mido.MidiTrack()
-    new_mid.tracks.append(new_track)
 
-    current_sec   = 0.0                # absolute time while we read
-    # last_quantised_sec = FIRST_FRAME / fps # where the very first message will land
-    last_quantised_sec = 0.0
-    # default tempo until we see the first set_tempo meta
-    tempo = mido.bpm2tempo(120)            # 500 000 μs per quarter
-    
+    current_sec   = 0.0
     last_frame = FIRST_FRAME
-    
     # Create a PrettyMIDI object
     piano_out = pretty_midi.PrettyMIDI()
-    # Create an Instrument instance for a cello instrument
     piano_program = pretty_midi.instrument_name_to_program('Acoustic Grand Piano')
     piano = pretty_midi.Instrument(program=piano_program)
-    
+
     # Store all notes in a list to be added to the PrettyMIDI object
     # key: note number, value: list of notes
     notes: dict[int, list[tuple[mido.Message, bool, int]]] = {}
-    
+
     for msg in mid:
         current_sec += msg.time
         frame = FIRST_FRAME + round(current_sec * fps)
@@ -281,46 +269,20 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
                 mat = obj.active_material
                 mat.diffuse_color = ORANGE if on else neutral_colour[obj.name]
                 mat.keyframe_insert("diffuse_color", frame=free_frame)
-                
+
             last_frame = max(last_frame, free_frame)
-            
+
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
             notes[msg.note].append((msg, on, free_frame))
-            
-            # # ==== COPY TO NEW MIDI FILE ====
-            # quantised_sec  = free_frame / fps
-            # print(f"quantised_sec for frame {free_frame}: {quantised_sec}")
-            # delta_sec  = quantised_sec - last_quantised_sec
-            # print(f"delta_sec for frame {free_frame}: {delta_sec}")
-            # last_quantised_sec = quantised_sec
-            # # Convert the delta *seconds* → *ticks* expected by the writer
-            # delta_ticks = round(
-            #     mido.second2tick(delta_sec,
-            #                     mid.ticks_per_beat,
-            #                     tempo)
-            # )
-            # print(f"delta_ticks for frame {free_frame}: {delta_ticks}")
-            # # It must be a non-negative int
-            # delta_ticks = max(0, int(delta_ticks))
-            # # Copy the message so the original stays intact
-            # new_msg = copy.deepcopy(msg)
-            # new_msg.time = delta_ticks
-            # new_track.append(new_msg)
-            # # =============================
-            
-        # Keep track of tempo changes so conversion stays correct
-        if msg.type == 'set_tempo':
-            tempo = msg.tempo
-            new_track.append(msg)
 
-    for i in bpy.data.actions:
-        for fcu in i.fcurves:
-            for pt in fcu.keyframe_points:
-                pt.interpolation = "CONSTANT"
+    set_interpolation('CONSTANT')
                 
+    print(f"[INFO] ==== Successfully imported and animated MIDI: {midi_path.name} ====")
+    
                 
+    # --- Synthesize new midi ----------------------------------------
     # For each note, collapse the 'on' and 'off' events into a single note
     for note_number, note_events in notes.items():
         # note_events is a list of (msg, on, free_frame) tuples
@@ -336,15 +298,9 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
                         start=free_frame / fps,
                         end=note_events[i + 1][2] / fps
                     ))
-                    
-    print(f"[INFO] ==== Successfully imported and animated MIDI: {midi_path.name} ====")
-
     curr_path = Path(os.path.abspath(__file__)).parent
     synthesized_midi_path = curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
     synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-    # new_mid.save(synthesized_midi_path)
-    
-    # Add the piano instrument to the PrettyMIDI object
     piano_out.instruments.append(piano)
     piano_out.write(str(synthesized_midi_path))
     print(f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}")
@@ -437,6 +393,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-e", "--end_frame", type=int, help="End frame", default=None, required=False
     )
+    parser.add_argument(
+        "-p", "--highlight_presses", type=bool, help="Highlight presses", default=False, required=False
+    )
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [] # blender passes script arguments after "--"
     args = parser.parse_args(argv)
     MIDI_PATH = Path(args.midi_path)
@@ -444,6 +403,7 @@ if __name__ == "__main__":
     FPS = int(args.fps)
     VERBOSE = args.verbose
     END_FRAME = args.end_frame
+    HIGHLIGHT_PRESS = args.highlight_presses
     if not MIDI_PATH.exists():
         raise FileNotFoundError(f"MIDI file not found: {MIDI_PATH}")
 
@@ -453,7 +413,7 @@ if __name__ == "__main__":
     render_from_midi(
         midi_path=MIDI_PATH,
         output_path=OUTPUT_DIR / f"{MIDI_PATH.stem}.mp4",
-        highlight_presses=False,
+        highlight_presses=HIGHLIGHT_PRESS,
         fps=FPS,
         verbose=VERBOSE,
         end_frame=END_FRAME,
