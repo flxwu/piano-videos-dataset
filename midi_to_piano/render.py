@@ -21,6 +21,7 @@ from pathlib import Path
 import midi2audio
 import mido
 import bpy # pylint: disable=import-error
+import pretty_midi
 
 
 # Add the project directory to Blender's sys.path to import utils
@@ -234,6 +235,17 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     tempo = mido.bpm2tempo(120)            # 500 000 μs per quarter
     
     last_frame = FIRST_FRAME
+    
+    # Create a PrettyMIDI object
+    piano_out = pretty_midi.PrettyMIDI()
+    # Create an Instrument instance for a cello instrument
+    piano_program = pretty_midi.instrument_name_to_program('Acoustic Grand Piano')
+    piano = pretty_midi.Instrument(program=piano_program)
+    
+    # Store all notes in a list to be added to the PrettyMIDI object
+    # key: note number, value: list of notes
+    notes: dict[int, list[tuple[mido.Message, bool, int]]] = {}
+    
     for msg in mid:
         current_sec += msg.time
         frame = FIRST_FRAME + round(current_sec * fps)
@@ -272,26 +284,32 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
                 
             last_frame = max(last_frame, free_frame)
             
-            # ==== COPY TO NEW MIDI FILE ====
-            quantised_sec  = free_frame / fps
-            print(f"quantised_sec for frame {free_frame}: {quantised_sec}")
-            delta_sec  = quantised_sec - last_quantised_sec
-            print(f"delta_sec for frame {free_frame}: {delta_sec}")
-            last_quantised_sec = quantised_sec
-            # Convert the delta *seconds* → *ticks* expected by the writer
-            delta_ticks = round(
-                mido.second2tick(delta_sec,
-                                mid.ticks_per_beat,
-                                tempo)
-            )
-            print(f"delta_ticks for frame {free_frame}: {delta_ticks}")
-            # It must be a non-negative int
-            delta_ticks = max(0, int(delta_ticks))
-            # Copy the message so the original stays intact
-            new_msg = copy.deepcopy(msg)
-            new_msg.time = delta_ticks
-            new_track.append(new_msg)
-            # =============================
+            # Add the note to the list of notes
+            if msg.note not in notes:
+                notes[msg.note] = []
+            notes[msg.note].append((msg, on, free_frame))
+            
+            # # ==== COPY TO NEW MIDI FILE ====
+            # quantised_sec  = free_frame / fps
+            # print(f"quantised_sec for frame {free_frame}: {quantised_sec}")
+            # delta_sec  = quantised_sec - last_quantised_sec
+            # print(f"delta_sec for frame {free_frame}: {delta_sec}")
+            # last_quantised_sec = quantised_sec
+            # # Convert the delta *seconds* → *ticks* expected by the writer
+            # delta_ticks = round(
+            #     mido.second2tick(delta_sec,
+            #                     mid.ticks_per_beat,
+            #                     tempo)
+            # )
+            # print(f"delta_ticks for frame {free_frame}: {delta_ticks}")
+            # # It must be a non-negative int
+            # delta_ticks = max(0, int(delta_ticks))
+            # # Copy the message so the original stays intact
+            # new_msg = copy.deepcopy(msg)
+            # new_msg.time = delta_ticks
+            # new_track.append(new_msg)
+            # # =============================
+            
         # Keep track of tempo changes so conversion stays correct
         if msg.type == 'set_tempo':
             tempo = msg.tempo
@@ -302,21 +320,40 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
             for pt in fcu.keyframe_points:
                 pt.interpolation = "CONSTANT"
                 
+                
+    # For each note, collapse the 'on' and 'off' events into a single note
+    for note_number, note_events in notes.items():
+        # note_events is a list of (msg, on, free_frame) tuples
+        # if we get (msg, on) followed by (msg, off), we add a note to pretty_midi_notes
+        for i, (msg, on, free_frame) in enumerate(note_events):
+            if on:
+                # we have an 'on' event
+                if i + 1 < len(note_events) and not note_events[i + 1][1]:
+                    # we have an 'off' event
+                    piano.notes.append(pretty_midi.Note(
+                        velocity=msg.velocity,
+                        pitch=note_number,
+                        start=free_frame / fps,
+                        end=note_events[i + 1][2] / fps
+                    ))
+                    
     print(f"[INFO] ==== Successfully imported and animated MIDI: {midi_path.name} ====")
-    
-    print("[INFO] ==== Rendering MIDI to WAV ====")
+
     curr_path = Path(os.path.abspath(__file__)).parent
     synthesized_midi_path = curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
     synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-    new_mid.save(synthesized_midi_path)
-    print(f"[INFO] ==== Successfully rendered MIDI to WAV: {synthesized_midi_path} ====")
-    print("[INFO] ==== Adding synthesized audio strip ====")
+    # new_mid.save(synthesized_midi_path)
+    
+    # Add the piano instrument to the PrettyMIDI object
+    piano_out.instruments.append(piano)
+    piano_out.write(str(synthesized_midi_path))
+    print(f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}")
+    
     wav = midi_to_wav(
-        midi_path=midi_path,
+        midi_path=synthesized_midi_path,
         wav_path=curr_path / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav"
     )
     add_audio_strip(wav)
-    print("[INFO] ==== Successfully added synthesized audio strip ====")
     return last_frame
 
 
@@ -325,18 +362,14 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
 # -------------------------------------------------------------------
 def midi_to_wav(midi_path: Path,
                 wav_path: Path):
-    """Render *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""       
+    """Convert *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""       
+    print(f"[INFO] Converting MIDI ({midi_path.name}) to WAV ({wav_path.name})")
     midi_path = Path(midi_path).expanduser()
     wav_path  = Path(wav_path).expanduser()
     wav_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if wav_path.exists():
-        return wav_path           # skip if we rendered it already
-
-    print(f"[INFO] Rendering MIDI from file {midi_path.name} to {wav_path.name}")
     fs = midi2audio.FluidSynth()
     fs.midi_to_audio(str(midi_path), str(wav_path))
-    print(f"[INFO] Finished rendering {midi_path.name} to {wav_path.name}")
+    print(f"[INFO] Finished converting MIDI ({midi_path.name}) to WAV ({wav_path.name})")
     return wav_path
 
 def add_audio_strip(wav_path: Path, channel: int = 1):
@@ -344,6 +377,7 @@ def add_audio_strip(wav_path: Path, channel: int = 1):
     Insert a WAV into the VSE even if no Sequence Editor area exists.
     Returns the newly created strip.
     """
+    print(f"[INFO] ==== Adding audio strip {wav_path} ====")
     wav_path = Path(wav_path).expanduser()
     scn      = bpy.context.scene
     seq_ed   = scn.sequence_editor or scn.sequence_editor_create()
@@ -353,6 +387,7 @@ def add_audio_strip(wav_path: Path, channel: int = 1):
         filepath  = str(wav_path),
         channel   = channel,
         frame_start = FIRST_FRAME)
+    print(f"[INFO] ==== Successfully added synthesized audio strip {wav_path} ====")
 
     return strip
 
@@ -362,7 +397,7 @@ def add_audio_strip(wav_path: Path, channel: int = 1):
 # ---------------------------------------------------------
 
 
-def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_presses=False, verbose=False):
+def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_presses=False, verbose=False, end_frame=None):
     """Render a piano animation from a MIDI file to a video.
     
     Args:
@@ -379,10 +414,9 @@ def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_pre
     lamp(light_type="SUN", location=(105, 0, 100), energy=4)
 
     create_piano()
-    last_frame = animate_from_midi(midi_path, highlight_presses, verbose)
+    end_frame = end_frame or animate_from_midi(midi_path, highlight_presses, verbose)
 
-    render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=last_frame + 10)
-    # render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=250)
+    render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=end_frame + 1)
 
 
 if __name__ == "__main__":
@@ -400,12 +434,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "-v", "--verbose", type=bool, help="Verbose mode", default=False, required=False    
     )
+    parser.add_argument(
+        "-e", "--end_frame", type=int, help="End frame", default=None, required=False
+    )
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [] # blender passes script arguments after "--"
     args = parser.parse_args(argv)
     MIDI_PATH = Path(args.midi_path)
     OUTPUT_DIR = Path(args.output_dir)
     FPS = int(args.fps)
     VERBOSE = args.verbose
+    END_FRAME = args.end_frame
     if not MIDI_PATH.exists():
         raise FileNotFoundError(f"MIDI file not found: {MIDI_PATH}")
 
@@ -415,7 +453,8 @@ if __name__ == "__main__":
     render_from_midi(
         midi_path=MIDI_PATH,
         output_path=OUTPUT_DIR / f"{MIDI_PATH.stem}.mp4",
-        highlight_presses=True,
+        highlight_presses=False,
         fps=FPS,
-        verbose=VERBOSE
+        verbose=VERBOSE,
+        end_frame=END_FRAME,
     )
