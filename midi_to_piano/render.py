@@ -365,7 +365,7 @@ def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_pre
     """
     clear_scene()
 
-    camera(location=(95, -15, 100), rotation=(15, 0, 0))
+    camera(location=(95, -10, 65), rotation=(15, 0, 0))
 
     lamp(light_type="SUN", location=(105, 0, 100), energy=4)
 
