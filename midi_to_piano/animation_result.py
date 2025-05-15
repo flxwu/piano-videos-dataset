@@ -1,5 +1,5 @@
 import pretty_midi
-from midi_to_piano.note_event import NoteEvent
+from note_event import NoteEvent
 
 
 class AnimationResult:
@@ -33,4 +33,5 @@ class AnimationResult:
                             end=note_events[i + 1].frame / self.fps,
                         )
                     )
+        piano_out.instruments.append(piano)
         return piano_out

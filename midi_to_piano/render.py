@@ -13,7 +13,6 @@ Quick usage
 """
 
 import argparse
-import copy
 import os
 import pickle
 import sys
@@ -24,9 +23,6 @@ import numpy as np
 import midi2audio
 import mido
 import bpy  # pylint: disable=import-error
-from midi_to_piano.animation_result import AnimationResult
-from midi_to_piano.blender_utils import build_key, clear_scene
-from midi_to_piano.generate_labels import midi_to_binary_roll
 import pretty_midi
 
 
@@ -35,7 +31,10 @@ import pretty_midi
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
-from midi_to_piano.note_event import NoteEvent
+from animation_result import AnimationResult
+from blender_utils import build_key, clear_scene
+from generate_labels import midi_to_binary_roll
+from note_event import NoteEvent
 from utils import camera, lamp, render_to_frame_jpg, render_to_video, set_interpolation  # pylint: disable=import-error
 
 
@@ -165,7 +164,7 @@ def _initialize_keys(key_cache):
 
 
 def animate_from_midi(
-    midi_path: Path, highlight_presses=True, verbose=False
+    midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
 ) -> AnimationResult:
     """
     Create piano key animations from a MIDI file.
@@ -198,6 +197,8 @@ def animate_from_midi(
     for msg in mid:
         current_sec += msg.time
         frame = FIRST_FRAME + round(current_sec * fps)
+        if end_frame is not None and frame > end_frame:
+            break
 
         if msg.type in {"note_on", "note_off"}:
             on = msg.type == "note_on" and msg.velocity > 0
@@ -330,6 +331,7 @@ def render_from_midi(
     midi_npzs_out_dir = output_dir / "midi" / midi_path.stem
     labels_out_dir = output_dir / "labels"
     frames_out_dir.mkdir(parents=True, exist_ok=True)
+    midi_npzs_out_dir.mkdir(parents=True, exist_ok=True)
     labels_out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Save Frame Images
