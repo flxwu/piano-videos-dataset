@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pickle
 import numpy as np
 import pretty_midi
@@ -22,6 +23,7 @@ def midi_to_binary_roll(
 def generate_labels(
     original_midi_name: str,
     new_midi: pretty_midi.PrettyMIDI,
+    dest_dir: Path,
     fps: int = 25,
 ) -> dict[int, np.ndarray]:
     """
@@ -29,16 +31,13 @@ def generate_labels(
     """
     binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
 
-    dest_frames_dir = "/home/stud/gruener/repos/Audeo/data_hq/input_images/testing"
-    dest_labels_dir = "/home/stud/gruener/repos/Audeo/data_hq/labels/testing"
-    dest_midi_dir = "/home/stud/gruener/repos/Audeo/data_hq/midi/testing"
-
+    labels_dir = dest_dir / "labels"
     # Keep original video name
-    new_video_name = f"video_{original_midi_name}"
-    new_video_path = os.path.join(dest_frames_dir, new_video_name)
-    new_midi_path = os.path.join(dest_midi_dir, new_video_name)
-    os.makedirs(new_video_path, exist_ok=True)
-    os.makedirs(new_midi_path, exist_ok=True)
+    video_name = f"video_{original_midi_name}"
+    video_path = dest_dir / "input_images" / video_name
+    new_midi_path = dest_dir / "midi" / video_name
+    video_path.mkdir(parents=True, exist_ok=True)
+    new_midi_path.mkdir(parents=True, exist_ok=True)
 
     # Convert binary roll to dictionary format
     label_dict = {}
@@ -46,7 +45,7 @@ def generate_labels(
         label_dict[i] = roll
 
     # Save labels in pickle format
-    with open(os.path.join(dest_labels_dir, f"{original_midi_name}.pkl"), "wb") as f:
+    with open(labels_dir / f"{original_midi_name}.pkl", "wb") as f:
         pickle.dump(label_dict, f)
 
     # Process MIDI files - create NPZ files for every 50 frames

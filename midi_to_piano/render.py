@@ -15,12 +15,18 @@ Quick usage
 import argparse
 import copy
 import os
+import pickle
 import sys
 import math
 from pathlib import Path
+
+import numpy as np
 import midi2audio
 import mido
-import bpy # pylint: disable=import-error
+import bpy  # pylint: disable=import-error
+from midi_to_piano.animation_result import AnimationResult
+from midi_to_piano.blender_utils import build_key, clear_scene
+from midi_to_piano.generate_labels import midi_to_binary_roll
 import pretty_midi
 
 
@@ -30,7 +36,7 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
 from midi_to_piano.note_event import NoteEvent
-from utils import camera, lamp, render_to_video, set_interpolation # pylint: disable=import-error
+from utils import camera, lamp, render_to_frame_jpg, render_to_video, set_interpolation  # pylint: disable=import-error
 
 
 # -------------------------------------------------------------------
@@ -58,50 +64,6 @@ prefs.edit.keyframe_new_interpolation_type = "LINEAR"
 ORANGE = (1.0, 0.5, 0.0, 1.0)  # <- highlight colour
 
 # -------------------------------------------------------------------
-
-
-def clear_scene():
-    """Delete all objects in the current scene."""
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=False)
-
-
-def set_origin_at_back(obj, length):
-    """Move cursor to the rear edge of *obj* and set that as the origin."""
-    x, y, _ = obj.location
-    bpy.context.scene.cursor.location = (x, y + length / 2, 0)
-    bpy.ops.object.origin_set(type="ORIGIN_CURSOR", center="MEDIAN")
-
-
-def build_key(
-    name: str,
-    width: float,
-    height: float,
-    length: float,
-    left: float,
-    top: float,
-    is_black: bool,
-):
-    """Create a key whose **left edge** sits at *left* and **top edge** sits at *top* and return the object.
-    note: length = "tiefe"
-    """
-    cube_x = left + width / 2
-    cube_y = top - length / 2
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(cube_x, cube_y, height))
-
-    key = bpy.context.object
-    key.name = name
-    key.scale = (width, length, height)
-    key.rotation_mode = "XYZ"
-
-    # UNIQUE material per key -------------------------------------
-    mat = bpy.data.materials.new(f"{name}_Mat")
-    base_colour = (0, 0, 0, 1) if is_black else (0.9, 0.9, 0.9, 1)
-    mat.diffuse_color = base_colour
-    key.data.materials.append(mat)
-
-    set_origin_at_back(key, length)
-    return key
 
 
 def create_piano():
@@ -185,14 +147,14 @@ def _setup_key_cache():
         o.name: o for o in bpy.data.objects if o.name.startswith(("White_", "Black_"))
     }
     used_frames = {name: set() for name in key_cache}
-    
+
     # Store neutral colors
     neutral_colour = {
-        name: obj.active_material.diffuse_color[:] 
-        for name, obj in key_cache.items()
+        name: obj.active_material.diffuse_color[:] for name, obj in key_cache.items()
     }
-    
+
     return key_cache, used_frames, neutral_colour
+
 
 def _initialize_keys(key_cache):
     """Set initial key positions and colors at frame 0"""
@@ -201,10 +163,13 @@ def _initialize_keys(key_cache):
         obj.keyframe_insert("delta_rotation_euler", index=0, frame=0)
         obj.active_material.keyframe_insert("diffuse_color", frame=0)
 
-def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) -> int:
+
+def animate_from_midi(
+    midi_path: Path, highlight_presses=True, verbose=False
+) -> AnimationResult:
     """
     Create piano key animations from a MIDI file.
-    
+
     Args:
         midi_path: Path to the MIDI file
         highlight_presses: Whether to highlight pressed keys
@@ -215,7 +180,7 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     midi_path = midi_path.expanduser()
     if not midi_path.exists():
         raise FileNotFoundError(f"MIDI file not found: {midi_path}")
-    
+
     key_cache, used_frames, neutral_colour = _setup_key_cache()
     _initialize_keys(key_cache)
 
@@ -224,15 +189,10 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
 
     # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
 
-    current_sec   = 0.0
+    current_sec = 0.0
     last_frame = FIRST_FRAME
-    # Create a PrettyMIDI object
-    piano_out = pretty_midi.PrettyMIDI()
-    piano_program = pretty_midi.instrument_name_to_program('Acoustic Grand Piano')
-    piano = pretty_midi.Instrument(program=piano_program)
 
-    # Store all notes in a list to be added to the PrettyMIDI object
-    # key: note number, value: list of notes
+    # Store a dict of all animated notes {"note number": list of notes]
     notes: dict[int, list[NoteEvent]] = {}
 
     for msg in mid:
@@ -278,54 +238,27 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
                 notes[msg.note] = []
             notes[msg.note].append(NoteEvent(msg, on, free_frame))
 
-    set_interpolation('CONSTANT')
-                
+    set_interpolation("CONSTANT")
     print(f"[INFO] ==== Successfully imported and animated MIDI: {midi_path.name} ====")
-    
-                
-    # --- Synthesize new midi ----------------------------------------
-    # For each note, collapse the 'on' and 'off' events into a single note
-    for note_number, note_events in notes.items():
-        # note_events is a list of (msg, on, free_frame) tuples
-        # if we get (msg, on) followed by (msg, off), we add a note to pretty_midi_notes
-        for i, note_event in enumerate(note_events):
-            if note_event.on and i + 1 < len(note_events) and not note_events[i + 1].on:
-                # we have an 'on' event followed by an 'off' event
-                piano.notes.append(pretty_midi.Note(
-                    velocity=note_event.msg.velocity,
-                    pitch=note_number,
-                    start=note_event.frame / fps,
-                    end=note_events[i + 1].frame / fps
-                ))
-    curr_path = Path(os.path.abspath(__file__)).parent
-    synthesized_midi_path = curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
-    synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-    piano_out.instruments.append(piano)
-    piano_out.write(str(synthesized_midi_path))
-    print(f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}")
-    
-    wav = midi_to_wav(
-        midi_path=synthesized_midi_path,
-        wav_path=curr_path / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav"
-    )
-    add_audio_strip(wav)
-    return last_frame
+    return AnimationResult(fps=fps, end_frame=last_frame, events_for_note=notes)
 
 
 # -------------------------------------------------------------------
 # MIDI ➜ WAV  (uses midi2audio)
 # -------------------------------------------------------------------
-def midi_to_wav(midi_path: Path,
-                wav_path: Path):
-    """Convert *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""       
+def midi_to_wav(midi_path: Path, wav_path: Path):
+    """Convert *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""
     print(f"[INFO] Converting MIDI ({midi_path.name}) to WAV ({wav_path.name})")
     midi_path = Path(midi_path).expanduser()
-    wav_path  = Path(wav_path).expanduser()
+    wav_path = Path(wav_path).expanduser()
     wav_path.parent.mkdir(parents=True, exist_ok=True)
     fs = midi2audio.FluidSynth()
     fs.midi_to_audio(str(midi_path), str(wav_path))
-    print(f"[INFO] Finished converting MIDI ({midi_path.name}) to WAV ({wav_path.name})")
+    print(
+        f"[INFO] Finished converting MIDI ({midi_path.name}) to WAV ({wav_path.name})"
+    )
     return wav_path
+
 
 def add_audio_strip(wav_path: Path, channel: int = 1):
     """
@@ -334,14 +267,15 @@ def add_audio_strip(wav_path: Path, channel: int = 1):
     """
     print(f"[INFO] ==== Adding audio strip {wav_path} ====")
     wav_path = Path(wav_path).expanduser()
-    scn      = bpy.context.scene
-    seq_ed   = scn.sequence_editor or scn.sequence_editor_create()
+    scn = bpy.context.scene
+    seq_ed = scn.sequence_editor or scn.sequence_editor_create()
 
     strip = seq_ed.sequences.new_sound(
-        name      = wav_path.stem,
-        filepath  = str(wav_path),
-        channel   = channel,
-        frame_start = FIRST_FRAME)
+        name=wav_path.stem,
+        filepath=str(wav_path),
+        channel=channel,
+        frame_start=FIRST_FRAME,
+    )
     print(f"[INFO] ==== Successfully added synthesized audio strip {wav_path} ====")
 
     return strip
@@ -352,9 +286,17 @@ def add_audio_strip(wav_path: Path, channel: int = 1):
 # ---------------------------------------------------------
 
 
-def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_presses=False, verbose=False, end_frame=None):
+def render_from_midi(
+    midi_path: Path,
+    output_dir: Path,
+    fps: int,
+    highlight_presses=False,
+    verbose=False,
+    end_frame=None,
+    with_video=False,
+):
     """Render a piano animation from a MIDI file to a video.
-    
+
     Args:
         midi_path: Path to the input MIDI file
         output_path: Path where the output video will be saved
@@ -369,33 +311,107 @@ def render_from_midi(midi_path: Path, output_path: Path, fps: int, highlight_pre
     lamp(light_type="SUN", location=(105, 0, 100), energy=4)
 
     create_piano()
-    end_frame = end_frame or animate_from_midi(midi_path, highlight_presses, verbose)
+    animation_result: AnimationResult = animate_from_midi(
+        midi_path, highlight_presses, verbose
+    )
+    end_frame = end_frame or animation_result.end_frame
 
-    render_to_video(output_path=output_path, fps=fps, start_frame=FIRST_FRAME, end_frame=end_frame + 1)
+    if with_video:
+        # add one extra frame at end to make sure the last note is visible
+        render_to_video(
+            output_path=output_dir / f"{midi_path.stem}.mp4",
+            fps=fps,
+            start_frame=FIRST_FRAME,
+            end_frame=end_frame + 1,
+        )
+
+    # -- SAVE TRAINING DATA: Frame Images, Labels (Piano Roll), Midi
+    frames_out_dir = output_dir / "input_images" / midi_path.stem
+    midi_npzs_out_dir = output_dir / "midi" / midi_path.stem
+    labels_out_dir = output_dir / "labels"
+    frames_out_dir.mkdir(parents=True, exist_ok=True)
+    labels_out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Save Frame Images
+    for frame_nr in range(FIRST_FRAME, end_frame):
+        render_to_frame_jpg(
+            output_path=frames_out_dir / f"{frame_nr}.jpg",
+            frame_nr=frame_nr,
+        )
+
+    # 2. Save Labels
+    new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
+    binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
+    # Convert binary roll to dictionary format
+    label_dict: dict[int, np.ndarray] = {}
+    for i, roll in enumerate(binary_roll):
+        label_dict[i] = roll
+    # Save labels in pickle format
+    with open(labels_out_dir / f"{midi_path.stem}.pkl", "wb") as f:
+        pickle.dump(label_dict, f)
+
+    # 3. Save MIDI files
+    # Process MIDI files - create NPZ files for every 50 frames
+    for i in range(0, len(binary_roll), 50):
+        if i + 50 <= len(binary_roll):
+            # Create a 50x88 array for the MIDI data
+            midi_data = np.zeros((50, 88), dtype=np.float64)
+            # Fill with the corresponding labels
+            for j in range(50):
+                if i + j < len(binary_roll):
+                    midi_data[j] = binary_roll[i + j]
+
+            # Save as NPZ file
+            npz_filename = f"{i}-{i + 50}.npz"
+            np.savez(str(midi_npzs_out_dir / npz_filename), midi=midi_data)
 
 
 if __name__ == "__main__":
-    print(f"[DEBUG]: {sys.version} | Executable {sys.executable} | Running in directory {os.getcwd()} | On Rendering Engine {bpy.context.scene.render.engine}")
+    print(
+        f"[DEBUG]: {sys.version} | Executable {sys.executable} | Running in directory {os.getcwd()} | On Rendering Engine {bpy.context.scene.render.engine}"
+    )
     parser = argparse.ArgumentParser(prog="midi-to-piano", description="midi-to-piano")
     parser.add_argument(
-        "-m", "--midi_path", type=str, help="Path to either a MIDI file, or a directory of MIDI files", default=None, required=True
+        "-m",
+        "--midi_path",
+        type=str,
+        help="Path to either a MIDI file, or a directory of MIDI files",
+        default=None,
+        required=True,
     )
     parser.add_argument(
-        "-f", "--fps", type=str, help="FPS for the rendered video", default=24, required=False
+        "-f",
+        "--fps",
+        type=str,
+        help="FPS for the rendered video",
+        default=24,
+        required=False,
     )
     parser.add_argument(
-        "-o", "--output_dir", type=str, help="Path to the output directory", default=None, required=True
+        "-o",
+        "--output_dir",
+        type=str,
+        help="Path to the output directory",
+        default=None,
+        required=True,
     )
     parser.add_argument(
-        "-v", "--verbose", type=bool, help="Verbose mode", default=False, required=False    
+        "-v", "--verbose", type=bool, help="Verbose mode", default=False, required=False
     )
     parser.add_argument(
         "-e", "--end_frame", type=int, help="End frame", default=None, required=False
     )
     parser.add_argument(
-        "-p", "--highlight_presses", type=bool, help="Highlight presses", default=False, required=False
+        "-p",
+        "--highlight_presses",
+        type=bool,
+        help="Highlight presses",
+        default=False,
+        required=False,
     )
-    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [] # blender passes script arguments after "--"
+    argv = (
+        sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    )  # blender passes script arguments after "--"
     args = parser.parse_args(argv)
     MIDI_PATH = Path(args.midi_path)
     OUTPUT_DIR = Path(args.output_dir)
@@ -411,7 +427,7 @@ if __name__ == "__main__":
 
     render_from_midi(
         midi_path=MIDI_PATH,
-        output_path=OUTPUT_DIR / f"{MIDI_PATH.stem}.mp4",
+        output_dir=OUTPUT_DIR,
         highlight_presses=HIGHLIGHT_PRESS,
         fps=FPS,
         verbose=VERBOSE,
