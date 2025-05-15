@@ -29,6 +29,7 @@ import pretty_midi
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
+from midi_to_piano.note_event import NoteEvent
 from utils import camera, lamp, render_to_video, set_interpolation # pylint: disable=import-error
 
 
@@ -232,7 +233,7 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
 
     # Store all notes in a list to be added to the PrettyMIDI object
     # key: note number, value: list of notes
-    notes: dict[int, list[tuple[mido.Message, bool, int]]] = {}
+    notes: dict[int, list[NoteEvent]] = {}
 
     for msg in mid:
         current_sec += msg.time
@@ -275,7 +276,7 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
-            notes[msg.note].append((msg, on, free_frame))
+            notes[msg.note].append(NoteEvent(msg, on, free_frame))
 
     set_interpolation('CONSTANT')
                 
@@ -287,17 +288,15 @@ def animate_from_midi(midi_path: Path, highlight_presses=True, verbose=False) ->
     for note_number, note_events in notes.items():
         # note_events is a list of (msg, on, free_frame) tuples
         # if we get (msg, on) followed by (msg, off), we add a note to pretty_midi_notes
-        for i, (msg, on, free_frame) in enumerate(note_events):
-            if on:
-                # we have an 'on' event
-                if i + 1 < len(note_events) and not note_events[i + 1][1]:
-                    # we have an 'off' event
-                    piano.notes.append(pretty_midi.Note(
-                        velocity=msg.velocity,
-                        pitch=note_number,
-                        start=free_frame / fps,
-                        end=note_events[i + 1][2] / fps
-                    ))
+        for i, note_event in enumerate(note_events):
+            if note_event.on and i + 1 < len(note_events) and not note_events[i + 1].on:
+                # we have an 'on' event followed by an 'off' event
+                piano.notes.append(pretty_midi.Note(
+                    velocity=note_event.msg.velocity,
+                    pitch=note_number,
+                    start=note_event.frame / fps,
+                    end=note_events[i + 1].frame / fps
+                ))
     curr_path = Path(os.path.abspath(__file__)).parent
     synthesized_midi_path = curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
     synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
