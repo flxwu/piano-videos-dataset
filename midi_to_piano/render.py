@@ -13,6 +13,7 @@ import pickle
 import sys
 import math
 from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 import midi2audio  # type: ignore
@@ -316,7 +317,7 @@ def render_from_midi(
     if with_video:
         # add one extra frame at end to make sure the last note is visible
         render_to_video(
-            output_path=output_dir / f"{midi_path.stem}.mp4",
+            output_path=output_dir / "rendered_videos" / f"{midi_path.stem}.mp4",
             fps=fps,
             start_frame=FIRST_FRAME,
             end_frame=end_frame + 1,
@@ -331,7 +332,7 @@ def render_from_midi(
     labels_out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Save Frame Images
-    for frame_nr in range(FIRST_FRAME, end_frame):
+    for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
         render_to_frame_jpg(
             output_path=frames_out_dir / f"{frame_nr}.jpg",
             frame_nr=frame_nr,
@@ -400,6 +401,14 @@ if __name__ == "__main__":
         "-e", "--end_frame", type=int, help="End frame", default=None, required=False
     )
     parser.add_argument(
+        "-w",
+        "--with_video",
+        type=bool,
+        help="Render video",
+        default=False,
+        required=False,
+    )
+    parser.add_argument(
         "-p",
         "--highlight_presses",
         type=bool,
@@ -417,17 +426,31 @@ if __name__ == "__main__":
     VERBOSE = args.verbose
     END_FRAME = args.end_frame
     HIGHLIGHT_PRESS = args.highlight_presses
+    WITH_VIDEO = args.with_video
     if not MIDI_PATH.exists():
         raise FileNotFoundError(f"MIDI file not found: {MIDI_PATH}")
 
     if not OUTPUT_DIR.exists() or not OUTPUT_DIR.is_dir():
         raise FileNotFoundError(f"Output directory not found: {OUTPUT_DIR}")
 
-    render_from_midi(
-        midi_path=MIDI_PATH,
-        output_dir=OUTPUT_DIR,
-        highlight_presses=HIGHLIGHT_PRESS,
-        fps=FPS,
-        verbose=VERBOSE,
-        end_frame=END_FRAME,
-    )
+    if MIDI_PATH.is_dir():
+        for midi_file in tqdm(MIDI_PATH.glob("*.midi")):
+            render_from_midi(
+                midi_path=midi_file,
+                output_dir=OUTPUT_DIR,
+                highlight_presses=HIGHLIGHT_PRESS,
+                fps=FPS,
+                verbose=VERBOSE,
+                end_frame=END_FRAME,
+                with_video=WITH_VIDEO,
+            )
+    else:
+        render_from_midi(
+            midi_path=MIDI_PATH,
+            output_dir=OUTPUT_DIR,
+            highlight_presses=HIGHLIGHT_PRESS,
+            fps=FPS,
+            verbose=VERBOSE,
+            end_frame=END_FRAME,
+            with_video=WITH_VIDEO,
+        )

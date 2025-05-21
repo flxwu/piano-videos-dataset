@@ -1,11 +1,17 @@
+"""
+Utils for Blender.
+"""
+
+import os
 from pathlib import Path
-import bpy
 from math import radians
-from mathutils import Euler
+import sys
+import bpy  # type: ignore # pylint: disable=import-error
+from mathutils import Euler  # type: ignore # pylint: disable=import-error # https://docs.blender.org/api/current/mathutils.html
 
 
 def camera(location, rotation):
-    print("[INFO]: Creating camera")
+    # print("[INFO]: Creating camera")
     bpy.ops.object.add(type="CAMERA", location=location)
     cam = bpy.context.object
     cam.rotation_euler = Euler(
@@ -17,19 +23,36 @@ def camera(location, rotation):
 
 
 # https://docs.blender.org/manual/en/latest/render/lights/light_object.html#sun-light
-def lamp(location, light_type="SUN", energy=1, color=(1, 1, 1), target=None):
-    # Lamp types: 'POINT', 'SUN', 'SPOT', 'HEMI', 'AREA'
-    print("[INFO]: Creating lamp")
+def lamp(location, light_type="SUN", energy=1, color=(1, 1, 1)):
+    """
+    Create a lamp.
+    Lamp types: 'POINT', 'SUN', 'SPOT', 'HEMI', 'AREA'
+    """
+    # print("[INFO]: Creating lamp")
     bpy.ops.object.add(type="LIGHT", location=location)
     obj = bpy.context.object
     obj.data.type = light_type
     obj.data.energy = energy
     obj.data.color = color
-
-    # TODO: add target constraint
-    # if target:
-    #     trackToConstraint(obj, target)
     return obj
+
+
+def bpy_render_with_surpressed_logs(**kwargs):
+    # redirect output to log file
+    logfile = "blender_render.log"
+    open(logfile, "a").close()  # pylint: disable=unspecified-encoding # create log file if it doesn't exist
+    old = os.dup(sys.stdout.fileno())
+    sys.stdout.flush()
+    os.close(sys.stdout.fileno())
+    fd = os.open(logfile, os.O_WRONLY)
+
+    # do the rendering
+    bpy.ops.render.render(**kwargs)
+
+    # disable output redirection
+    os.close(fd)
+    os.dup(old)
+    os.close(old)
 
 
 def render_to_frame_jpg(
@@ -44,7 +67,7 @@ def render_to_frame_jpg(
 
     sc.frame_set(frame_nr)
     print(f"▶  Rendering frame {frame_nr} to {output_path}")
-    bpy.ops.render.render(write_still=True)
+    bpy_render_with_surpressed_logs(write_still=True)
     print(f"▶  Rendering finished, saved to {output_path}")
 
 
@@ -103,7 +126,7 @@ def render_to_video(
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
-    bpy.ops.render.render(animation=True)
+    bpy_render_with_surpressed_logs(animation=True)
     print(f"▶  Rendering finished, saved to {output_path}")
 
 
