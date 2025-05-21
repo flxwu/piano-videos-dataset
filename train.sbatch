@@ -8,6 +8,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --output=/storage/user/wfel/slurm/logs/slurm-%j.out
 #SBATCH --error=/storage/user/wfel/slurm/logs/slurm-%j.out
+#SBATCH --nodelist=node11,node12,node13,node14,node15,node16,node17,node18,node19
 pwd; hostname; date
 nvidia-smi
 
