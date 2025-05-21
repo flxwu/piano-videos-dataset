@@ -34,6 +34,7 @@ def lamp(location, light_type="SUN", energy=1, color=(1, 1, 1)):
     obj.data.type = light_type
     obj.data.energy = energy
     obj.data.color = color
+    obj.data.cutoff_distance = 1000
     return obj
 
 

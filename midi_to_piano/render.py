@@ -304,17 +304,33 @@ def render_from_midi(
     """
     clear_scene()
 
-    camera(location=(95, -10, 65), rotation=(15, 0, 0))
-
-    lamp(light_type="SUN", location=(105, 0, 100), energy=4)
+    camera(location=(95, 0, 80), rotation=(5, 0, 0))
+    lamp(light_type="POINT", location=(95, -200, 150), energy=2.5 * (10**6))
 
     create_piano()
     animation_result: AnimationResult = animate_from_midi(
         midi_path, highlight_presses, verbose
     )
     end_frame = end_frame or animation_result.end_frame
+    new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
 
     if with_video:
+        curr_path = Path(os.path.abspath(__file__)).parent
+        synthesized_midi_path = (
+            curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
+        )
+        synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
+        new_midi.write(str(synthesized_midi_path))
+        print(
+            f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
+        )
+
+        wav = midi_to_wav(
+            midi_path=synthesized_midi_path,
+            wav_path=curr_path
+            / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav",
+        )
+        add_audio_strip(wav)
         # add one extra frame at end to make sure the last note is visible
         render_to_video(
             output_path=output_dir / "rendered_videos" / f"{midi_path.stem}.mp4",
@@ -339,7 +355,6 @@ def render_from_midi(
         )
 
     # 2. Save Labels
-    new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
     binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
     # Convert binary roll to dictionary format
     label_dict: dict[int, np.ndarray] = {}
