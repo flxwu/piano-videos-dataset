@@ -61,6 +61,10 @@ def render_to_frame_jpg(
     frame_nr: int,
 ):
     sc = bpy.context.scene
+    
+    # set the number of samples to 30 for all rendering engines (CYCLES and EEVEE)
+    sc.cycles.samples = 30
+    sc.eevee.taa_render_samples = 30
 
     render = sc.render
     render.filepath = str(output_path)

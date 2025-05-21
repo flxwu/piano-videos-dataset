@@ -6,11 +6,17 @@
 #SBATCH --mem=16G
 #SBATCH --time=180:00:00
 #SBATCH --mail-type=ALL
-#SBATCH --output=/storage/user/gruener/slurm/logs/slurm-%j.out
-#SBATCH --error=/storage/user/gruener/slurm/logs/slurm-%j.out
+#SBATCH --output=/storage/user/wfel/slurm/logs/slurm-%j.out
+#SBATCH --error=/storage/user/wfel/slurm/logs/slurm-%j.out
 pwd; hostname; date
 nvidia-smi
 
 
-PYTHONPATH=/home/stud/gruener/repos/piano-videos-dataset:$PYTHONPATH \\ 
-/home/stud/gruener/blender-4.4.3-linux-x64/blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
+PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH \
+/home/stud/wfel/blender-4.4.3-linux-x64/blender \
+  --python-use-system-env \
+  -b \
+  --python midi_to_piano/render.py \
+  -- \
+  -m data/bach-1.mid \
+  -o generated_data

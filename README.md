@@ -15,7 +15,7 @@ Locate the python executable in your blender installation, for example "/home/st
 Then do 
 
 ```bash
-/home/stud/wfel/blender-4.4.3-linux-x64/4.4/python/bin/python3.10 -m pip install mido midi2audio
+/home/stud/wfel/blender-4.4.3-linux-x64/4.4/python/bin/python3.11 -m pip install mido midi2audio tqdm pretty_midi
 ```
 
 
