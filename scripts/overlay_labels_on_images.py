@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""
+Utility script for overlaying a label-pkl for one MIDI on the generated frame images for that MIDI.
+
+--input_dir: Path to the directory containing the generated frame images. (input_images/midi_name)
+--pkl: Path to the label-pkl file. (labels/midi_name.pkl)
+--output_dir: Path to the directory to save the overlayed images. (overlays/midi_name)
+
+Usage:
+uv run python scripts/overlay_labels_on_images.py --input_dir=/home/stud/gruener/repos/piano-videos-dataset/generated_data/input_images/twinkle --pkl=/home/stud/gruener/repos/piano-videos-dataset/generated_data/labels/twinkle.pkl --output_dir overlays
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Tuple
+import pickle
+
+import numpy as np
+import numpy.typing as npt
+from PIL import Image, ImageDraw, ImageFont
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _text_size(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont,
+) -> Tuple[float, float]:
+    """Return width and height of *text* for both new & old Pillow versions."""
+    # Pillow ≥ 10.0 removed ``textsize``; use ``textbbox`` instead.
+    if hasattr(draw, "textbbox"):
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+        return right - left, bottom - top
+    # Pillow < 10.0
+    return draw.textsize(text, font=font)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Core function
+# ---------------------------------------------------------------------------
+
+
+def overlay_array(
+    image_path: Path | str,
+    array: np.ndarray,
+    output_path: Path | str,
+    *,
+    margin_ratio: float = 0.07,
+    y_ratio: float = 0.3,
+    text_fill: Tuple[int, int, int] = (255, 0, 0),
+) -> None:
+    """Overlay *array* onto *image_path* and save to *output_path*.
+
+    Parameters
+    ----------
+    image_path : Path | str
+        Path to the input JPG image.
+    array : np.ndarray
+        1-D NumPy array with exactly 88 elements.
+    output_path : Path | str
+        Destination for the annotated image.
+    margin_ratio : float, optional
+        Left/right margins as a fraction of image width.
+    y_ratio : float, optional
+        Vertical position of the text as a fraction of image height.
+    font_size_ratio : float, optional
+        Font size as a fraction of image height.
+    text_fill : tuple[int,int,int], optional
+        RGB colour of the text.
+    """
+
+    # --- load & validate ----------------------------------------------------
+    img = Image.open(image_path).convert("RGB")
+    width, height = img.size
+
+    if array.size != 88:
+        raise ValueError(f"Expected array of length 88, got {array.size}")
+
+    # --- prepare drawing context -------------------------------------------
+    draw = ImageDraw.Draw(img)
+    font_size = 60
+    try:
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.truetype(
+            "arial.ttf", font_size
+        )
+    except OSError:
+        font = ImageFont.load_default()
+
+    # --- compute positions --------------------------------------------------
+    margin = width * margin_ratio
+    xs = np.linspace(margin, width - margin, array.size)
+    y = int(height * y_ratio)
+
+    # --- draw each value ----------------------------------------------------
+    for x, value in zip(xs, array):
+        if value == 0:
+            text = "0"
+        else:
+            text = "1"
+        tw, th = _text_size(draw, text, font)
+        draw.text((float(x - tw / 2), y - th / 2), text, fill=text_fill, font=font)
+
+    # --- save ---------------------------------------------------------------
+    img.save(output_path)
+    print(f"Saved overlay image to {output_path}")
+
+
+# ---------------------------------------------------------------------------
+# CLI wrapper
+# ---------------------------------------------------------------------------
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Overlay an 88-entry NumPy array onto a JPG image.",
+        epilog="Example: python overlay_array_on_image.py photo.jpg data.npy annotated.jpg",
+    )
+    parser.add_argument(
+        "-i", "--input_dir", type=Path, help="Input JPG image path", required=True
+    )
+    parser.add_argument(
+        "-o", "--output_dir", type=Path, help="Output JPG image path", required=True
+    )
+    parser.add_argument(
+        "-p", "--pkl", type=Path, help="Path to .pkl file", required=True
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    pkl_path = Path(args.pkl)
+    input_dir_path = Path(args.input_dir)
+    output_dir_path = Path(args.output_dir)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+    if not pkl_path.exists():
+        raise FileNotFoundError(f"File {pkl_path} does not exist")
+    if not input_dir_path.exists() or not input_dir_path.is_dir():
+        raise FileNotFoundError(
+            f"Directory {input_dir_path} does not exist or is not a directory"
+        )
+    with open(args.pkl, "rb") as f:
+        data: dict[int, npt.NDArray[np.int_]] = pickle.load(f)
+        for i in data.keys():
+            arr = data[i]  # Array of length 88
+
+            overlay_array(
+                # e.g. input_images/twinkle/0.jpg
+                image_path=input_dir_path / f"{i}.jpg",
+                array=arr,
+                output_path=output_dir_path / Path(f"annotated_{i}.jpg"),
+            )
+
+
+if __name__ == "__main__":
+    main()
