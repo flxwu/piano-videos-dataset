@@ -1,8 +1,16 @@
-import pretty_midi
-from note_event import NoteEvent
+"""
+Class for synthesizing a new MIDI from a list of NoteEvents.
+"""
+
+import pretty_midi  # type: ignore
+from midi_to_piano.note_event import NoteEvent
 
 
 class AnimationResult:
+    """
+    Class for synthesizing a new MIDI from a list of NoteEvents.
+    """
+
     def __init__(
         self, end_frame: int, fps: int, events_for_note: dict[int, list[NoteEvent]]
     ):
@@ -11,6 +19,9 @@ class AnimationResult:
         self.events_for_note = events_for_note
 
     def synthesize_new_midi(self) -> pretty_midi.PrettyMIDI:
+        """
+        Synthesize a new MIDI from the class's NoteEvents.
+        """
         piano_out = pretty_midi.PrettyMIDI()
         piano_program = pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
         piano = pretty_midi.Instrument(program=piano_program)

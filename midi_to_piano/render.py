@@ -1,15 +1,10 @@
 """
-Piano + MIDI‑driven animation
+Piano + MIDI-driven animation
 ===========================================
-Creates a full 88‑key piano (A0–C8) and inserts keypress animations corresponding to a MIDI.
+Creates a full 88-key piano (A0-C8) and inserts keypress animations corresponding to a MIDI.
 
-Quick usage
------------
-1. Install the `mido` python package into blender's environment (import pip; pip.main(['install', 'mido', '--user']))
-2. Put your MIDI file somewhere and set `MIDI_PATH` below.
-3. In a fresh scene, open the *Scripting* tab, paste this script, and click
-   **Run Script**.
-4. Press **Spacebar** to watch the playback.
+Run using
+PYTHONPATH=/home/stud/gruener/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
 """
 
 import argparse
@@ -20,22 +15,23 @@ import math
 from pathlib import Path
 
 import numpy as np
-import midi2audio
-import mido
-import bpy  # pylint: disable=import-error
-import pretty_midi
+import midi2audio  # type: ignore
+import mido  # type: ignore
+import bpy  # type: ignore # pylint: disable=import-error
+import pretty_midi  # type: ignore
 
 
-# Add the project directory to Blender's sys.path to import utils
-# TODO: Turn into a package
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-if PROJECT_DIR not in sys.path:
-    sys.path.append(PROJECT_DIR)
-from animation_result import AnimationResult
-from blender_utils import build_key, clear_scene
-from generate_labels import midi_to_binary_roll
-from note_event import NoteEvent
-from utils import camera, lamp, render_to_frame_jpg, render_to_video, set_interpolation  # pylint: disable=import-error
+from midi_to_piano.animation_result import AnimationResult
+from midi_to_piano.blender_utils import build_key, clear_scene
+from midi_to_piano.generate_labels import midi_to_binary_roll
+from midi_to_piano.note_event import NoteEvent
+from midi_to_piano.utils import (
+    camera,
+    lamp,
+    render_to_frame_jpg,
+    render_to_video,
+    set_interpolation,
+)
 
 
 # -------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """
-Piano + MIDI‑driven animation
+Piano + MIDI-driven animation
 ===========================================
-Creates a full 88‑key piano (A0–C8) and inserts keypress animations corresponding to a MIDI.
+Creates a full 88-key piano (A0–C8) and inserts keypress animations corresponding to a MIDI.
 
 Quick usage
 -----------

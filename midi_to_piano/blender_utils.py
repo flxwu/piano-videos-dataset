@@ -1,4 +1,8 @@
-import bpy
+"""
+Utility functions for adding/manipulating objects in the blender scene.
+"""
+
+import bpy  # type: ignore # pylint: disable=import-error
 
 
 def build_key(

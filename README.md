@@ -22,10 +22,11 @@ Then do
 ## Run script
 
 ```bash
-blender -b --python midi_to_piano/render.py -- --midi_path bach-1.mid --output_dir renders
+PYTHONPATH=/home/stud/gruener/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
 ```
 
 Optional Flags:
+- --render [true/false]
 - --end_frame [number]
 - --fps [number]
 - --verbose
