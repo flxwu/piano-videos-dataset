@@ -19,5 +19,5 @@ PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH \
   -b \
   --python midi_to_piano/render.py \
   -- \
-  -m /home/stud/wfel/repos/piano-videos-dataset/data/maestro-v3.0.0/2004 \
+  -m /home/stud/wfel/repos/piano-videos-dataset/data/maestro-v3.0.0/2018 \
   -o generated_data

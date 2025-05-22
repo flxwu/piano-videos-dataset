@@ -55,18 +55,29 @@ def bpy_render_with_surpressed_logs(**kwargs):
     os.dup(old)
     os.close(old)
 
+def set_crop_rectangle(sc, render):
+    # set the number of samples to 30 for all rendering engines (CYCLES and EEVEE)
+    sc.cycles.samples = 30
+    sc.eevee.taa_render_samples = 30
+    
+    # --- define the crop rectangle (0-1, lower-left origin) -----------
+    render.border_min_x = 0.12   # left   edge 
+    render.border_max_x = 0.885   # right  edge
+    render.border_min_y = 0.44   # bottom edge 
+    render.border_max_y = 0.63   # top    edge
+
+    # --- turn it on ----------------------------------------------------
+    render.use_border        = True    # draw/render only the region
+    render.use_crop_to_border = True   # make the output file **smaller**
 
 def render_to_frame_jpg(
     output_path: Path,
     frame_nr: int,
 ):
     sc = bpy.context.scene
-    
-    # set the number of samples to 30 for all rendering engines (CYCLES and EEVEE)
-    sc.cycles.samples = 30
-    sc.eevee.taa_render_samples = 30
-
     render = sc.render
+    
+    set_crop_rectangle(sc, render)
     render.filepath = str(output_path)
     render.image_settings.file_format = "JPEG"
 
@@ -100,9 +111,7 @@ def render_to_video(
     sc = bpy.context.scene
     render = sc.render
 
-    # set the number of samples to 30 for all rendering engines (CYCLES and EEVEE)
-    sc.cycles.samples = 30
-    sc.eevee.taa_render_samples = 30
+    set_crop_rectangle(sc, render)
 
     sc.frame_start = start_frame
     sc.frame_end = end_frame
