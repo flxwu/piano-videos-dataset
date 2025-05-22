@@ -22,7 +22,7 @@ Then do
 ## Run script
 
 ```bash
-PYTHONPATH=/home/stud/gruener/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
+PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python midi_to_piano/render.py -- -m data/bach-1.mid -o generated_data
 ```
 
 Optional Flags:

@@ -23,9 +23,10 @@ import pretty_midi  # type: ignore
 
 
 from midi_to_piano.animation_result import AnimationResult
-from midi_to_piano.blender_utils import build_key, clear_scene
+from midi_to_piano.blender_utils import clear_scene
 from midi_to_piano.generate_labels import midi_to_binary_roll
 from midi_to_piano.note_event import NoteEvent
+from midi_to_piano.piano_rendering import create_piano
 from midi_to_piano.utils import (
     camera,
     lamp,
@@ -38,18 +39,8 @@ from midi_to_piano.utils import (
 # -------------------------------------------------------------------
 # CONFIGURATION
 # -------------------------------------------------------------------
-SCALE_FACTOR = 100
-WHITE_KEY_W = 0.030 * SCALE_FACTOR
-WHITE_KEY_H = 0.030 * SCALE_FACTOR
-WHITE_KEY_L = 0.230 * SCALE_FACTOR  # Tiefe
-
-BLACK_KEY_W = 0.016 * SCALE_FACTOR
-BLACK_KEY_H = 0.045 * SCALE_FACTOR
-BLACK_KEY_L = 0.120 * SCALE_FACTOR
 
 KEY_DOWN_DEG = 7  # rotation when pressed (degrees)
-
-KEY_GAP = 0.3
 CLEAR_SCENE = True  # Set True to delete everything before building
 
 FIRST_FRAME = 0
@@ -58,69 +49,6 @@ prefs = bpy.context.preferences
 prefs.edit.keyframe_new_interpolation_type = "LINEAR"
 
 ORANGE = (1.0, 0.5, 0.0, 1.0)  # <- highlight colour
-
-# -------------------------------------------------------------------
-
-
-def create_piano():
-    """Build an 88-key keyboard in a collection named 'Piano'."""
-
-    # If the collection already exists, reuse it
-    piano_col = bpy.data.collections.get("Piano")
-    if piano_col is None:
-        piano_col = bpy.data.collections.new("Piano")
-        bpy.context.scene.collection.children.link(piano_col)
-
-    # White note names A0–C8 (52 keys)
-    white_notes = [
-        "A0",
-        "B0",
-        *[f"{n}{o}" for o in range(1, 8) for n in ("C", "D", "E", "F", "G", "A", "B")],
-        "C8",
-    ]
-
-    left = 10.0  # current left edge position along X
-    pending_black = []  # tuples (center_x, note_name)
-
-    for idx, note in enumerate(white_notes):
-        build_key(
-            name=f"White_{note}",
-            width=WHITE_KEY_W,
-            height=WHITE_KEY_H,
-            length=WHITE_KEY_L,
-            left=left,
-            top=WHITE_KEY_L,
-            is_black=False,
-        )
-
-        # No black keys after last white key
-        if idx == len(white_notes) - 1:
-            break
-
-        # Decide if a black key follows this white key (no sharps after E or B)
-        if note[0] not in {"E", "B"}:
-            black_center = left + WHITE_KEY_W  # halfway between this and next white
-            pending_black.append((black_center, note))
-
-        left += WHITE_KEY_W + KEY_GAP  # advance left edge for next white
-
-    # Build black keys after all whites for clarity
-    for center_x, base_note in pending_black:
-        bkey = build_key(
-            name=f"Black_{base_note}#",
-            width=BLACK_KEY_W,
-            height=BLACK_KEY_H,
-            length=BLACK_KEY_L,
-            left=center_x - BLACK_KEY_W / 2,
-            top=WHITE_KEY_L,
-            is_black=True,
-        )
-        # Lift black keys higher than whites
-        bkey.location.z += (WHITE_KEY_H - BLACK_KEY_H) / 2
-
-    print(
-        f"Piano generated with {len(white_notes)} white and {len(pending_black)} black keys"
-    )
 
 
 # ---------------------------------------------------------
@@ -305,7 +233,9 @@ def render_from_midi(
     clear_scene()
 
     camera(location=(95, 0, 80), rotation=(5, 0, 0))
-    lamp(light_type="POINT", location=(95, -200, 150), energy=2.5 * (10**6))
+    lamp(light_type="AREA", location=(95, -200, 150), energy=1 * (10**6))
+    lamp(light_type="AREA", location=(0, -200, 150), energy=3 * (10**6))
+    lamp(light_type="AREA", location=(200, -200, 150), energy=3 * (10**6))
 
     create_piano()
     animation_result: AnimationResult = animate_from_midi(
