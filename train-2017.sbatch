@@ -2,7 +2,7 @@
 #SBATCH --job-name="piano_video_renders"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:2,VRAM:8
+#SBATCH --gres=gpu:1,VRAM:8
 #SBATCH --mem=16G
 #SBATCH --time=180:00:00
 #SBATCH --mail-type=ALL

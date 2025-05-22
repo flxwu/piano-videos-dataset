@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name="piano_video_renders"
+#SBATCH --job-name="2013_renders"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:8
@@ -19,5 +19,5 @@ PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH \
   -b \
   --python midi_to_piano/render.py \
   -- \
-  -m /home/stud/wfel/repos/piano-videos-dataset/data/maestro-v3.0.0/2018 \
+  -m /home/stud/wfel/repos/piano-videos-dataset/data/maestro-v3.0.0/2013 \
   -o generated_data
