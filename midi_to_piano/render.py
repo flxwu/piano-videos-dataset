@@ -40,7 +40,8 @@ from midi_to_piano.utils import (
 # CONFIGURATION
 # -------------------------------------------------------------------
 
-KEY_DOWN_DEG = 7  # rotation when pressed (degrees)
+KEY_DOWN_DEG = 2.5  # rotation when pressed (degrees)
+KEY_DOWN_Z = -0.08  # move downward
 CLEAR_SCENE = True  # Set True to delete everything before building
 
 FIRST_FRAME = 0
@@ -86,7 +87,8 @@ def _initialize_keys(key_cache):
         obj.delta_rotation_euler.x = 0.0
         obj.keyframe_insert("delta_rotation_euler", index=0, frame=0)
         obj.active_material.keyframe_insert("diffuse_color", frame=0)
-
+        obj.location.z = 0
+        obj.keyframe_insert("location", index=2, frame=0)
 
 def animate_from_midi(
     midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
@@ -150,6 +152,8 @@ def animate_from_midi(
             # --- rotation key ----------------------------------------
             obj.delta_rotation_euler.x = math.radians(KEY_DOWN_DEG if on else 0)
             obj.keyframe_insert("delta_rotation_euler", index=0, frame=free_frame)
+            obj.location.z = KEY_DOWN_Z if on else 0                       # move downward
+            obj.keyframe_insert("location", index=2, frame=free_frame)
 
             # --- colour key ------------------------------------------
             if highlight_presses:
