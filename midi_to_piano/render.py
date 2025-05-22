@@ -398,7 +398,7 @@ if __name__ == "__main__":
         "--fps",
         type=str,
         help="FPS for the rendered video",
-        default=24,
+        default=25,
         required=False,
     )
     parser.add_argument(
