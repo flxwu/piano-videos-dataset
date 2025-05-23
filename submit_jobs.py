@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+"""
+Submit jobs to the SLURM cluster.
+
+Usage:
+    uv run submit_jobs.py -m <list_of_midi_dirs> -o <output_dir> -b <blender_path>
+    or
+    uv run submit_jobs.py -M <midi_dir> -o <output_dir> -b <blender_path>
+
+Example:
+    uv run submit_jobs.py -M data/maestro_bach/ -o bach -b /home/wiss/koepa/code/piano-videos-dataset/blender-4.4.3-linux-x64/blender
+"""
+
 import argparse
 import subprocess
 import os

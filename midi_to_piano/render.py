@@ -33,7 +33,7 @@ from midi_to_piano.utils import (
     render_to_frame_jpg,
     render_to_video,
     set_interpolation,
-    get_output_paths
+    get_output_paths,
 )
 
 
@@ -90,6 +90,7 @@ def _initialize_keys(key_cache):
         obj.active_material.keyframe_insert("diffuse_color", frame=0)
         obj.location.z = 0
         obj.keyframe_insert("location", index=2, frame=0)
+
 
 def animate_from_midi(
     midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
@@ -153,7 +154,7 @@ def animate_from_midi(
             # --- rotation key ----------------------------------------
             obj.delta_rotation_euler.x = math.radians(KEY_DOWN_DEG if on else 0)
             obj.keyframe_insert("delta_rotation_euler", index=0, frame=free_frame)
-            obj.location.z = KEY_DOWN_Z if on else 0                       # move downward
+            obj.location.z = KEY_DOWN_Z if on else 0  # move downward
             obj.keyframe_insert("location", index=2, frame=free_frame)
 
             # --- colour key ------------------------------------------
@@ -276,7 +277,9 @@ def render_from_midi(
         )
 
     # -- SAVE TRAINING DATA: Frame Images, Labels (Piano Roll), Midi
-    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(output_dir, midi_path)
+    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(
+        output_dir, midi_path
+    )
 
     # 1. Save Frame Images
     for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
@@ -381,7 +384,8 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"Output directory not found: {OUTPUT_DIR}")
 
     if MIDI_PATH.is_dir():
-        for midi_file in tqdm(MIDI_PATH.glob("*.midi")):
+        midi_files = list(MIDI_PATH.glob("*.midi"))
+        for i, midi_file in enumerate(midi_files):
             _, _, labels_pkl_path = get_output_paths(OUTPUT_DIR, midi_file)
             if labels_pkl_path.exists():
                 print(f"[INFO] Skipping {midi_file} because labels already exist")
@@ -395,6 +399,7 @@ if __name__ == "__main__":
                 end_frame=END_FRAME,
                 with_video=WITH_VIDEO,
             )
+            print(f"[INFO] Rendered {i}/{len(midi_files)} from directory {MIDI_PATH}")
     else:
         render_from_midi(
             midi_path=MIDI_PATH,
