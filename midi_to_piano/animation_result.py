@@ -52,7 +52,7 @@ class AnimationResult:
                     for frame in range(event.frame, next_event.frame):
                         frames_to_notes_pressed[frame][note_number - A0_MIDI] = 1
                         print(f"[NUMPY LABELS] Adding note {note_number} at frame {frame}")
-                i += 2
+                i += 1
                 
         # convert to numpy array
         for frame, notes_pressed in frames_to_notes_pressed.items():
