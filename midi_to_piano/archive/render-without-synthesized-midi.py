@@ -12,10 +12,10 @@ Quick usage
 4. Press **Spacebar** to watch the playback.
 """
 
-import bpy
+import bpy  # type: ignore
 import math
 from pathlib import Path
-from mathutils import Euler
+from mathutils import Euler  # type: ignore
 from math import pi, radians
 import sys
 import os
@@ -51,7 +51,7 @@ ORANGE = (1.0, 0.5, 0.0, 1.0)  # <- highlight colour
 # CHECK DEPENDENCIES
 # ---------------------------------------------------------
 try:
-    import mido
+    import mido  # type: ignore
 except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "The 'mido' library is required for MIDI import. "
@@ -192,7 +192,7 @@ def animate_from_midi(midi_path: str | Path, highlight_presses=True):
         o.name: o for o in bpy.data.objects if o.name.startswith(("White_", "Black_"))
     }
     # remember every frame already keyed for each key object
-    used_frames = {name: set() for name in key_cache}
+    used_frames: dict[str, set[int]] = {name: set() for name in key_cache}
 
     # --- put every key at rest on frame 0 ---------------------------
     for obj in key_cache.values():
@@ -277,9 +277,6 @@ def lamp(location, type="SUN", energy=1, color=(1, 1, 1), target=None):
     obj.data.type = type
     obj.data.energy = energy
     obj.data.color = color
-
-    if target:
-        trackToConstraint(obj, target)
     return obj
 
 

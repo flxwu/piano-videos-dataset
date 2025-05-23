@@ -9,6 +9,18 @@ import sys
 import bpy  # type: ignore # pylint: disable=import-error
 from mathutils import Euler  # type: ignore # pylint: disable=import-error # https://docs.blender.org/api/current/mathutils.html
 
+def get_output_paths(output_dir: Path, midi_path: Path) -> tuple[Path, Path, Path]:
+    frames_out_dir = output_dir / "input_images" / midi_path.stem
+    midi_npzs_out_dir = output_dir / "midi" / midi_path.stem
+    labels_out_dir = output_dir / "labels"
+    frames_out_dir.mkdir(parents=True, exist_ok=True)
+    midi_npzs_out_dir.mkdir(parents=True, exist_ok=True)
+    labels_out_dir.mkdir(parents=True, exist_ok=True)
+    
+    labels_pkl_path = labels_out_dir / f"{midi_path.stem}.pkl"
+    
+    return frames_out_dir, midi_npzs_out_dir, labels_pkl_path
+
 
 def camera(location, rotation):
     # print("[INFO]: Creating camera")
@@ -73,6 +85,7 @@ def set_crop_rectangle(sc, render):
 def render_to_frame_jpg(
     output_path: Path,
     frame_nr: int,
+    verbose: bool = False,
 ):
     sc = bpy.context.scene
     render = sc.render
@@ -82,9 +95,11 @@ def render_to_frame_jpg(
     render.image_settings.file_format = "JPEG"
 
     sc.frame_set(frame_nr)
-    print(f"▶  Rendering frame {frame_nr} to {output_path}")
+    if verbose:
+        print(f"▶  Rendering frame {frame_nr} to {output_path}")
     bpy_render_with_surpressed_logs(write_still=True)
-    print(f"▶  Rendering finished, saved to {output_path}")
+    if verbose:
+        print(f"▶  Rendering finished, saved to {output_path}")
 
 
 # -------------------------------------------------------------------
@@ -96,6 +111,7 @@ def render_to_video(
     bitrate: int = 8000,
     start_frame: int = 0,
     end_frame: int = 250,
+    verbose: bool = False,
 ):
     """
     Renders the current scene frame-range to a single MP4/H.264 file.
@@ -139,9 +155,11 @@ def render_to_video(
     # make sure directory exists
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
+    if verbose:
+        print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
     bpy_render_with_surpressed_logs(animation=True)
-    print(f"▶  Rendering finished, saved to {output_path}")
+    if verbose:
+        print(f"▶  Rendering finished, saved to {output_path}")
 
 
 def set_interpolation(interpolation: str) -> None:

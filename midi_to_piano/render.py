@@ -33,6 +33,7 @@ from midi_to_piano.utils import (
     render_to_frame_jpg,
     render_to_video,
     set_interpolation,
+    get_output_paths
 )
 
 
@@ -271,21 +272,18 @@ def render_from_midi(
             fps=fps,
             start_frame=FIRST_FRAME,
             end_frame=end_frame + 1,
+            verbose=verbose,
         )
 
     # -- SAVE TRAINING DATA: Frame Images, Labels (Piano Roll), Midi
-    frames_out_dir = output_dir / "input_images" / midi_path.stem
-    midi_npzs_out_dir = output_dir / "midi" / midi_path.stem
-    labels_out_dir = output_dir / "labels"
-    frames_out_dir.mkdir(parents=True, exist_ok=True)
-    midi_npzs_out_dir.mkdir(parents=True, exist_ok=True)
-    labels_out_dir.mkdir(parents=True, exist_ok=True)
+    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(output_dir, midi_path)
 
     # 1. Save Frame Images
     for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
         render_to_frame_jpg(
             output_path=frames_out_dir / f"{frame_nr}.jpg",
             frame_nr=frame_nr,
+            verbose=verbose,
         )
 
     # 2. Save Labels
@@ -295,7 +293,7 @@ def render_from_midi(
     for i, roll in enumerate(binary_roll):
         label_dict[i] = roll
     # Save labels in pickle format
-    with open(labels_out_dir / f"{midi_path.stem}.pkl", "wb") as f:
+    with open(labels_pkl_path, "wb") as f:
         pickle.dump(label_dict, f)
 
     # 3. Save MIDI files
@@ -384,6 +382,10 @@ if __name__ == "__main__":
 
     if MIDI_PATH.is_dir():
         for midi_file in tqdm(MIDI_PATH.glob("*.midi")):
+            _, _, labels_pkl_path = get_output_paths(OUTPUT_DIR, midi_file)
+            if labels_pkl_path.exists():
+                print(f"[INFO] Skipping {midi_file} because labels already exist")
+                continue
             render_from_midi(
                 midi_path=midi_file,
                 output_dir=OUTPUT_DIR,

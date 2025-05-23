@@ -1,5 +1,5 @@
 import copy
-import mido
+import mido  # type: ignore
 from pathlib import Path
 
 MIDI_PATH = Path(
@@ -8,5 +8,4 @@ MIDI_PATH = Path(
 
 mid = mido.MidiFile(MIDI_PATH, clip=True)
 
-new_mid  = mido.MidiFile(ticks_per_beat=mid.ticks_per_beat)
-
+new_mid = mido.MidiFile(ticks_per_beat=mid.ticks_per_beat)

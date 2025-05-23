@@ -17,8 +17,11 @@ def split_files_into_folders(source_dir: str, num_splits: int):
     # Convert to Path object for easier handling
     source_path = Path(source_dir)
     
-    # Get all files in the directory (excluding subdirectories)
-    files = [f for f in source_path.iterdir() if f.is_file()]
+    # Get all files in the directory (including subdirectories)
+    files = []
+    for path in source_path.rglob('*'):
+        if path.is_file():
+            files.append(path)
     
     if not files:
         print(f"No files found in {source_dir}")
