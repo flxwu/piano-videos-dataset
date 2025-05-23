@@ -4,7 +4,7 @@ Piano + MIDI-driven animation
 Creates a full 88-key piano (A0-C8) and inserts keypress animations corresponding to a MIDI.
 
 Run using
-PYTHONPATH=/home/stud/gruener/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
+PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
 """
 
 import argparse
@@ -16,6 +16,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import numpy as np
+import numpy.typing as npt
 import midi2audio  # type: ignore
 import mido  # type: ignore
 import bpy  # type: ignore # pylint: disable=import-error
@@ -169,7 +170,12 @@ def animate_from_midi(
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
+            print(f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}")
             notes[msg.note].append(NoteEvent(msg, on, free_frame))
+            
+    # sort notes[msg.note] by frame
+    for note in notes.values():
+        note.sort(key=lambda x: x.frame)
 
     set_interpolation("CONSTANT")
     print(f"[INFO] ==== Successfully imported and animated MIDI: {midi_path.name} ====")
@@ -291,25 +297,27 @@ def render_from_midi(
         )
 
     # 2. Save Labels
-    binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
-    # Convert binary roll to dictionary format
-    label_dict: dict[int, np.ndarray] = {}
-    for i, roll in enumerate(binary_roll):
-        label_dict[i] = roll
+    # binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
+    # # Convert binary roll to dictionary format
+    # label_dict: dict[int, np.ndarray] = {}
+    # for i, roll in enumerate(binary_roll):
+    #     label_dict[i] = roll
+    
+    label_dict: dict[int, npt.NDArray[np.int_]] = animation_result.get_frames_to_notes_pressed()
     # Save labels in pickle format
     with open(labels_pkl_path, "wb") as f:
         pickle.dump(label_dict, f)
 
     # 3. Save MIDI files
     # Process MIDI files - create NPZ files for every 50 frames
-    for i in range(0, len(binary_roll), 50):
-        if i + 50 <= len(binary_roll):
+    for i in range(0, len(label_dict.keys()), 50):
+        if i + 50 <= len(label_dict.keys()):
             # Create a 50x88 array for the MIDI data
             midi_data = np.zeros((50, 88), dtype=np.float64)
             # Fill with the corresponding labels
             for j in range(50):
-                if i + j < len(binary_roll):
-                    midi_data[j] = binary_roll[i + j]
+                if i + j < len(label_dict.keys()):
+                    midi_data[j] = label_dict[i + j]
 
             # Save as NPZ file
             npz_filename = f"{i}-{i + 50}.npz"
