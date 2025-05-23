@@ -120,17 +120,14 @@ def main():
         # Create a job name based on the directory name
         job_name = Path(midi_dir).name
 
-        # Create output subdirectory
-        output_subdir = os.path.join(args.output_dir, job_name)
-
         # Create the sbatch script content
         script_content = create_sbatch_script(
-            midi_dir, output_subdir, args.blender_path
+            midi_dir, args.output_dir, args.blender_path
         )
 
         # Submit the job
         result = submit_job(script_content, job_name)
-        print(f"Submitted job for {midi_dir} -> {output_subdir}")
+        print(f"Submitted job for {midi_dir} -> {args.output_dir}")
         print(f"Job submission result: {result}")
 
 

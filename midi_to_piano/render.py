@@ -94,8 +94,7 @@ def _initialize_keys(key_cache):
 
 
 def animate_from_midi(
-    fps: int,
-    midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
+    fps: int, midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
 ) -> AnimationResult:
     """
     Create piano key animations from a MIDI file.
@@ -170,9 +169,12 @@ def animate_from_midi(
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
-            print(f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}")
+            if verbose:
+                print(
+                    f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}"
+                )
             notes[msg.note].append(NoteEvent(msg, on, free_frame))
-            
+
     # sort notes[msg.note] by frame
     for note in notes.values():
         note.sort(key=lambda x: x.frame)
@@ -252,7 +254,10 @@ def render_from_midi(
 
     create_piano()
     animation_result: AnimationResult = animate_from_midi(
-        fps=fps, midi_path=midi_path, highlight_presses=highlight_presses, verbose=verbose
+        fps=fps,
+        midi_path=midi_path,
+        highlight_presses=highlight_presses,
+        verbose=verbose,
     )
     end_frame = end_frame or animation_result.end_frame
     new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
@@ -302,8 +307,10 @@ def render_from_midi(
     # label_dict: dict[int, np.ndarray] = {}
     # for i, roll in enumerate(binary_roll):
     #     label_dict[i] = roll
-    
-    label_dict: dict[int, npt.NDArray[np.int_]] = animation_result.get_frames_to_notes_pressed()
+
+    label_dict: dict[int, npt.NDArray[np.int_]] = (
+        animation_result.get_frames_to_notes_pressed()
+    )
     # Save labels in pickle format
     with open(labels_pkl_path, "wb") as f:
         pickle.dump(label_dict, f)
