@@ -7,7 +7,7 @@ Utility script for overlaying a label-pkl for one MIDI on the generated frame im
 --output_dir: Path to the directory to save the overlayed images. (overlays/midi_name)
 
 Usage:
-uv run python scripts/overlay_labels_on_images.py --input_dir=/home/stud/gruener/repos/piano-videos-dataset/generated_data/input_images/twinkle --pkl=/home/stud/gruener/repos/piano-videos-dataset/generated_data/labels/twinkle.pkl --output_dir overlays
+uv run python scripts/overlay_labels_on_images.py --input_dir=/home/stud/wfel/repos/piano-videos-dataset/generated_data/input_images/bach-1 --pkl=/home/stud/wfel/repos/piano-videos-dataset/generated_data/labels/bach-1.pkl --output_dir overlays
 """
 
 from __future__ import annotations
@@ -112,9 +112,9 @@ def overlay_array(
             text = "0"
             font = load_font(font_size=30)
             tw, th = _text_size(draw, text, font)
-            draw.text(
-                (float(xs[i] - tw / 2), y - th / 2), text, fill=(0, 0, 0), font=font
-            )
+            # draw.text(
+            #     (float(xs[i] - tw / 2), y - th / 2), text, fill=(0, 0, 0), font=font
+            # )
         else:
             text = key
             font = load_font(font_size=60)

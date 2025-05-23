@@ -93,6 +93,7 @@ def _initialize_keys(key_cache):
 
 
 def animate_from_midi(
+    fps: int,
     midi_path: Path, highlight_presses=True, verbose=False, end_frame=None
 ) -> AnimationResult:
     """
@@ -113,7 +114,7 @@ def animate_from_midi(
     _initialize_keys(key_cache)
 
     mid = mido.MidiFile(midi_path)
-    fps = bpy.context.scene.render.fps or 24
+    bpy.context.scene.render.fps = fps
 
     # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
 
@@ -245,7 +246,7 @@ def render_from_midi(
 
     create_piano()
     animation_result: AnimationResult = animate_from_midi(
-        midi_path, highlight_presses, verbose
+        fps=fps, midi_path=midi_path, highlight_presses=highlight_presses, verbose=verbose
     )
     end_frame = end_frame or animation_result.end_frame
     new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
