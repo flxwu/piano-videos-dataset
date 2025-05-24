@@ -15,7 +15,6 @@ wheels/
 renders/
 temp_render/
 maestro-v3.0.0/
-maestro_*/
 generated_data/
 generated_data_attempt_0/
 overlays/
