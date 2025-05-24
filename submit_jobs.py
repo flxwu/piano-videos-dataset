@@ -24,7 +24,7 @@ CURRENT_USER = os.getenv("USER")
 def create_sbatch_script(midi_dir, output_dir, BLENDER_PATH):
     """Create the sbatch script content."""
     script_content = f'''#!/bin/bash
-#SBATCH --job-name="{midi_dir.split("/")[-1]}_renders"
+#SBATCH --job-name="{midi_dir.split("/")[-2]}{midi_dir.split("/")[-1]}_renders"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:8
