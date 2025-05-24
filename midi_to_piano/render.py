@@ -415,7 +415,7 @@ if __name__ == "__main__":
                 end_frame=END_FRAME,
                 with_video=WITH_VIDEO,
             )
-            print(f"[INFO] Rendered {i}/{len(midi_files)} from directory {MIDI_PATH}")
+            print(f"[INFO] Rendered {i+1}/{len(midi_files)} from directory {MIDI_PATH}")
     else:
         render_from_midi(
             midi_path=MIDI_PATH,
