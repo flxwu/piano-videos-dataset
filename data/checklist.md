@@ -6,3 +6,5 @@ Total: 1276 pieces
 - franz schubert ⚒️ (211) (sophia)
 - rachmaninoff ⚒️ (61) (felix)
 - robert schumann ⚒️ (50) (felix)
+- franz liszt ⚒️ (134) (sophia)
+- claude debussy ⚒️ (45) (sophia)

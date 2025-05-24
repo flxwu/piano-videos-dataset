@@ -107,8 +107,12 @@ def main():
 
     # Get list of MIDI directories
     if args.midi_dir:
-        # Get all subdirectories from the provided directory
-        midi_dirs = [str(d) for d in Path(args.midi_dir).iterdir() if d.is_dir()]
+        # Get all non-empty subdirectories from the provided directory
+        midi_dirs = [
+            str(d)
+            for d in Path(args.midi_dir).iterdir()
+            if d.is_dir() and any(d.iterdir())
+        ]
         if not midi_dirs:
             print(f"Error: No subdirectories found in {args.midi_dir}")
             return
