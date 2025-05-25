@@ -24,7 +24,7 @@ CURRENT_USER = os.getenv("USER")
 def create_sbatch_script(midi_dir, output_dir, BLENDER_PATH):
     """Create the sbatch script content."""
     script_content = f'''#!/bin/bash
-#SBATCH --job-name="{midi_dir.split("/")[-2]}{midi_dir.split("/")[-1]}_renders"
+#SBATCH --job-name="{output_dir.split("/")[-1]}_renders"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:8
@@ -38,7 +38,7 @@ def create_sbatch_script(midi_dir, output_dir, BLENDER_PATH):
 pwd; hostname; date
 nvidia-smi
 
-mkdir -p /storage/user/{CURRENT_USER}/{output_dir}
+mkdir -p {output_dir}
 
 PYTHONPATH=/home/stud/{CURRENT_USER}/repos/piano-videos-dataset:$PYTHONPATH \\
 {BLENDER_PATH} \\
@@ -47,7 +47,7 @@ PYTHONPATH=/home/stud/{CURRENT_USER}/repos/piano-videos-dataset:$PYTHONPATH \\
   --python midi_to_piano/render.py \\
   -- \\
   -m {midi_dir} \\
-  -o /storage/user/{CURRENT_USER}/{output_dir}
+  -o {output_dir}
 '''
     return script_content
 
@@ -89,7 +89,7 @@ def main():
         help="Single directory containing MIDI subdirectories to process",
     )
     parser.add_argument(
-        "-o", "--output-dir", required=True, help="Output directory for all renders"
+        "-o", "--output-dir", required=False, help="Output directory for all renders"
     )
     parser.add_argument(
         "-b",
@@ -125,13 +125,27 @@ def main():
         job_name = Path(midi_dir).name
 
         # Create the sbatch script content
+        output_dir = args.output_dir
+        if output_dir is None:
+            if "__" in midi_dir:  # pieces with two composers
+                output_dir = midi_dir.lower()
+            else:
+                output_dir = midi_dir.split("_")[-1].lower()
+
+        # Skip if output directory already exists
+        if os.path.exists(f"/storage/user/{CURRENT_USER}/{output_dir}"):
+            print(f"Skipping {midi_dir} because {output_dir} already exists")
+            continue
+
         script_content = create_sbatch_script(
-            midi_dir, args.output_dir, args.blender_path
+            midi_dir=midi_dir,
+            output_dir=f"/storage/user/{CURRENT_USER}/{output_dir}",
+            BLENDER_PATH=args.blender_path,
         )
 
         # Submit the job
         result = submit_job(script_content, job_name)
-        print(f"Submitted job for {midi_dir} -> {args.output_dir}")
+        print(f"Submitted job for {midi_dir} -> {output_dir}")
         print(f"Job submission result: {result}")
 
 

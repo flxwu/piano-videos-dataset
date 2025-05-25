@@ -1,17 +1,18 @@
 import os
 import pickle
 
-
-TO_CHECK = ["rachmaninoff", "schumann"]
+TO_CHECK = ["beethoven", "chopin", "liszt", "mozart", "schubert", "tchaikovsky"]
+BASE_DIR = "/storage/user/koepa"
 
 for composer in TO_CHECK:
-    labels_dir = f"{composer}/labels"
-    images_dir = f"{composer}/input_images"
+    labels_dir = f"{BASE_DIR}/{composer}/labels"
+    images_dir = f"{BASE_DIR}/{composer}/input_images"
 
     for i, pkl_file in enumerate(os.listdir(labels_dir)):
         if i % 10 == 0:
             print(f"Verifying {i + 1} of {len(os.listdir(labels_dir))}")
         if not pkl_file.endswith(".pkl"):
+            print(f"skipping check for non-pkl file {pkl_file}")
             continue
         base = pkl_file[:-4]
         image_folder = os.path.join(images_dir, base)

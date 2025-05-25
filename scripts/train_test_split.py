@@ -1,26 +1,29 @@
 import os
 import shutil
+import pandas as pd
 
-BASE_PATH = '/storage/user/koepa/bach'
-IMAGES_BASE_PATH = os.path.join(BASE_PATH, 'input_images')
-LABELS_BASE_PATH = os.path.join(BASE_PATH, 'labels')
-MIDI_BASE_PATH = os.path.join(BASE_PATH, 'midi')
-COMPOSER = 'Johann Sebastian Bach'
+MAESTRO_CSV_PATH = (
+    "/home/wiss/koepa/code/piano-videos-dataset/data/maestro-v3.0.0/maestro-v3.0.0.csv"
+)
+BASE_PATH = "/storage/user/koepa/bach"
+IMAGES_BASE_PATH = os.path.join(BASE_PATH, "input_images")
+LABELS_BASE_PATH = os.path.join(BASE_PATH, "labels")
+MIDI_BASE_PATH = os.path.join(BASE_PATH, "midi")
+COMPOSER = "Johann Sebastian Bach"
 
 # Read csv using pandas
-import pandas as pd
-df = pd.read_csv('maestro-v3.0.0.csv')
+df = pd.read_csv(MAESTRO_CSV_PATH)
 
 # Filter rows where canonical_composer is 'Johann Sebastian Bach'
-bach_df = df[df['canonical_composer'] == COMPOSER]
+bach_df = df[df["canonical_composer"] == COMPOSER]
 
 for i, row in bach_df.iterrows():
-    split = row['split']
-    midi_name = row['midi_filename']
+    split = row["split"]
+    midi_name = row["midi_filename"]
     if "/" in midi_name:
         midi_name = midi_name.split("/")[1]  # path starts with year/
     midi_name = midi_name.replace(".midi", "")
-    image_dir_for_midi = os.path.join(IMAGES_BASE_PATH, midi_name) 
+    image_dir_for_midi = os.path.join(IMAGES_BASE_PATH, midi_name)
     label_pkl_for_midi = os.path.join(LABELS_BASE_PATH, f"{midi_name}.pkl")
     midi_dir_for_midi = os.path.join(MIDI_BASE_PATH, midi_name)
     # check that both exist
@@ -32,7 +35,7 @@ for i, row in bach_df.iterrows():
         shutil.move(image_dir_for_midi, new_img_dir)
     else:
         print(f"Image directory for {midi_name} does not exist")
-        
+
     if os.path.exists(label_pkl_for_midi):
         new_label_dir = os.path.join(LABELS_BASE_PATH, split)
         if not os.path.exists(new_label_dir):
@@ -41,7 +44,7 @@ for i, row in bach_df.iterrows():
         shutil.move(label_pkl_for_midi, new_label_dir)
     else:
         print(f"Label pickle for {midi_name} does not exist")
-        
+
     if os.path.exists(midi_dir_for_midi):
         new_midi_dir = os.path.join(MIDI_BASE_PATH, split)
         if not os.path.exists(new_midi_dir):
