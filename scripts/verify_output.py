@@ -1,7 +1,7 @@
 import os
 import pickle
 
-TO_CHECK = ["beethoven", "chopin", "liszt", "mozart", "schubert", "tchaikovsky"]
+TO_CHECK = ["debussy"]
 BASE_DIR = "/storage/user/koepa"
 
 for composer in TO_CHECK:
