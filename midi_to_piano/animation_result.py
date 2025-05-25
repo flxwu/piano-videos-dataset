@@ -7,16 +7,16 @@ from midi_to_piano.note_event import NoteEvent
 import numpy.typing as npt
 import numpy as np
 
+
 class AnimationResult:
     """
     Class for synthesizing a new MIDI from a list of NoteEvents.
     """
-    
 
     def __init__(
         self, end_frame: int, fps: int, events_for_note: dict[int, list[NoteEvent]]
     ):
-        self.end_frame = end_frame # last frame of the animation, i.e. last frame where a note is pressed
+        self.end_frame = end_frame  # last frame of the animation, i.e. last frame where a note is pressed
         self.fps = fps
         self.events_for_note = events_for_note
 
@@ -24,11 +24,13 @@ class AnimationResult:
         """
         Get the notes pressed at a given frame.
         """
-        A0_MIDI = 21       # lowest key on an 88-key piano
-        C8_MIDI = 108      # highest key on an 88-key piano
+        A0_MIDI = 21  # lowest key on an 88-key piano
+        C8_MIDI = 108  # highest key on an 88-key piano
         amount_frames = self.end_frame
         # initialize dict with amount_frames keys and a 88-entry array of 0s
-        frames_to_notes_pressed: dict[int, npt.NDArray[np.int_]] = {frame: np.zeros(88, dtype=np.int8) for frame in range(amount_frames)}
+        frames_to_notes_pressed: dict[int, npt.NDArray[np.int_]] = {
+            frame: np.zeros(88, dtype=np.int8) for frame in range(amount_frames)
+        }
         for note_number in range(A0_MIDI, C8_MIDI + 1):
             events_for_note = self.events_for_note.get(note_number, [])
             # events_for_note is a list of note events.
@@ -46,14 +48,16 @@ class AnimationResult:
                     next_event = events_for_note[i + 1]
                     # next_event should be off
                     if next_event.on:
-                        raise ValueError(f"Next event for note {note_number} is an on event")
+                        raise ValueError(
+                            f"Next event for note {note_number} is an on event"
+                        )
                     # set frames_to_notes_pressed[frame][note_number - A0_MIDI] = 1
                     # for all frames between event.frame and next_event.frame
                     for frame in range(event.frame, next_event.frame):
                         frames_to_notes_pressed[frame][note_number - A0_MIDI] = 1
-                        print(f"[NUMPY LABELS] Adding note {note_number} at frame {frame}")
+                        # print(f"[NUMPY LABELS] Adding note {note_number} at frame {frame}")
                 i += 1
-                
+
         # convert to numpy array
         for frame, notes_pressed in frames_to_notes_pressed.items():
             frames_to_notes_pressed[frame] = np.array(notes_pressed, dtype=np.int8)
