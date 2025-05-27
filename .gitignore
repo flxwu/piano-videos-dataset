@@ -13,7 +13,6 @@ wheels/
 .venv
 
 renders/
-temp_render/
 maestro-v3.0.0/
 generated_data/
 generated_data_attempt_0/
@@ -21,3 +20,4 @@ overlays/
 *.log
 logs.txt
 blender-4.4.3-linux-x64/
+output_video.mp4
