@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
 
+import subprocess
 import cv2
 import os
-import numpy as np
+import midi2audio
 from pathlib import Path
 
 
-def create_video_from_frames(input_dir, output_file, fps=25):
+def midi_to_wav(midi_path: Path, wav_path: Path):
+    """Convert *midi_path* to a 48 kHz 16-bit WAV via FluidSynth."""
+    print(f"[INFO] Converting MIDI ({midi_path.name}) to WAV ({wav_path.name})")
+    midi_path = Path(midi_path).expanduser()
+    wav_path = Path(wav_path).expanduser()
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
+    fs = midi2audio.FluidSynth()
+    fs.midi_to_audio(str(midi_path), str(wav_path))
+    print(
+        f"[INFO] Finished converting MIDI ({midi_path.name}) to WAV ({wav_path.name})"
+    )
+    return wav_path
+
+
+def create_video_from_frames(input_dir, output_file, midi_path, fps=25):
     """
     Create a video from a sequence of frames.
 
@@ -70,6 +85,37 @@ def create_video_from_frames(input_dir, output_file, fps=25):
     video.release()
     print(f"\nVideo saved to: {output_file}")
 
+    # Generate WAV file from MIDI
+    wav_path = midi_to_wav(midi_path, output_file.with_suffix(".wav"))
+    print(f"WAV file saved to: {wav_path}")
+
+    # Add audio to video using ffmpeg
+    temp_output = output_file.with_suffix(".temp.mp4")
+    os.rename(output_file, temp_output)
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i",
+        str(temp_output),
+        "-i",
+        str(wav_path),
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(output_file),
+    ]
+
+    try:
+        subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+        os.remove(temp_output)  # Clean up temp file
+        os.remove(wav_path)  # Clean up wav file
+        print("Successfully added audio to video")
+    except subprocess.CalledProcessError as e:
+        print(f"Error adding audio to video: {e.stderr.decode()}")
+        os.rename(temp_output, output_file)  # Restore original video if failed
+
     # Verify the video was created
     if not os.path.exists(output_file):
         print("Error: Video file was not created")
@@ -84,7 +130,8 @@ def create_video_from_frames(input_dir, output_file, fps=25):
 
 
 def main():
-    input_dir = "/storage/user/koepa/bach/input_images/MIDI-Unprocessed_01_R1_2008_01-04_ORIG_MID--AUDIO_01_R1_2008_wav--1"
+    input_dir = "/storage/user/koepa/maestro-visualized/Johann_Sebastian_Bach/input_images/testing/MIDI-Unprocessed_03_R1_2008_01-04_ORIG_MID--AUDIO_03_R1_2008_wav--1"
+    midi_path = "/home/wiss/koepa/code/piano-videos-dataset/midi_to_piano/temp_render/synthesized_MIDI-Unprocessed_03_R1_2008_01-04_ORIG_MID--AUDIO_03_R1_2008_wav--1.mid"
     output_file = "output_video.mp4"
 
     # Validate input directory
@@ -92,7 +139,7 @@ def main():
         print(f"Error: {input_dir} is not a valid directory")
         return
 
-    create_video_from_frames(input_dir, output_file, fps=25)
+    create_video_from_frames(input_dir, output_file, midi_path, fps=25)
 
 
 if __name__ == "__main__":

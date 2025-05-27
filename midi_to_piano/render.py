@@ -235,6 +235,7 @@ def render_from_midi(
     verbose=False,
     end_frame=None,
     with_video=False,
+    with_audio=True,
 ):
     """Render a piano animation from a MIDI file to a video.
 
@@ -261,23 +262,24 @@ def render_from_midi(
     )
     end_frame = end_frame or animation_result.end_frame
     new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
-
-    if with_video:
-        curr_path = Path(os.path.abspath(__file__)).parent
-        synthesized_midi_path = (
-            curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
-        )
-        synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-        new_midi.write(str(synthesized_midi_path))
-        print(
-            f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
-        )
-
+    curr_path = Path(os.path.abspath(__file__)).parent
+    synthesized_midi_path = (
+        curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
+    )
+    synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
+    new_midi.write(str(synthesized_midi_path))
+    if with_audio:
         wav = midi_to_wav(
             midi_path=synthesized_midi_path,
             wav_path=curr_path
             / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav",
         )
+
+    if with_video:
+        print(
+            f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
+        )
+
         add_audio_strip(wav)
         # add one extra frame at end to make sure the last note is visible
         render_to_video(

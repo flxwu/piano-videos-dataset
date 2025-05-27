@@ -15,8 +15,14 @@ def check_progress(base_path, csv_path):
     # Get all label directories
     base_path = Path(base_path)
     label_dirs = []
-    for dir in os.listdir(base_path):
+    for dir in [*os.listdir(base_path), *[f"maestro-visualized/{l}" for l in os.listdir(os.path.join(base_path, "maestro-visualized"))]]:
+        label_dir = os.path.join(base_path, dir, "labels")
+        if not os.path.exists(label_dir) or not os.path.isdir(label_dir):
+            continue
         label_dirs.append(os.path.join(base_path, dir, "labels"))
+
+    print(label_dirs)
+    
 
     # Process each label directory
     for label_dir in label_dirs:
