@@ -10,12 +10,9 @@ def rename_images(folder):
         return
     # List all jpg files that are named as numbers
     files = [f for f in os.listdir(folder) if f.endswith(".jpg") and f[:-4].isdigit()]
-    if len(files) == 0:
-        print(f"Skipping {folder}, no jpg files found")
-        return
     # Sort files numerically
-    files.sort(key=lambda x: int(x[:-4]))
-    for idx, filename in tqdm(enumerate(files, 1)):
+    for filename in tqdm(files):
+        idx = int(filename[:-4])
         new_name = f"frame_{idx:06d}.jpg"
         src = os.path.join(folder, filename)
         dst = os.path.join(folder, new_name)
@@ -33,4 +30,11 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python rename_frames.py <folder>")
         sys.exit(1)
-    rename_images(sys.argv[1])
+    # Call rename_images for all $foo/input_images subfolders
+    for folder in os.listdir(sys.argv[1]):
+        if os.path.isdir(os.path.join(sys.argv[1], folder, 'input_images')):
+            print(f"Renaming frames in {folder}")
+            rename_images(os.path.join(sys.argv[1], folder, 'input_images'))
+        else:
+            print(f"Skipping {folder}, no input_images subfolder found")
+    print("Done")
