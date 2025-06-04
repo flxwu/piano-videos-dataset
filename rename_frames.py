@@ -10,6 +10,9 @@ def rename_images(folder):
         return
     # List all jpg files that are named as numbers
     files = [f for f in os.listdir(folder) if f.endswith(".jpg") and f[:-4].isdigit()]
+    if len(files) == 0:
+        print(f"Skipping {folder}, no jpg files found")
+        return
     # Sort files numerically
     files.sort(key=lambda x: int(x[:-4]))
     for idx, filename in tqdm(enumerate(files, 1)):

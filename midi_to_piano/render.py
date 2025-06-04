@@ -298,7 +298,8 @@ def render_from_midi(
     # 1. Save Frame Images
     for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
         render_to_frame_jpg(
-            output_path=frames_out_dir / f"{frame_nr}.jpg",
+            # pad to 000001.jpg
+            output_path=frames_out_dir / f"{frame_nr:06d}.jpg",
             frame_nr=frame_nr,
             verbose=verbose,
         )
