@@ -72,11 +72,17 @@ def set_crop_rectangle(sc, render):
     sc.cycles.samples = 30
     sc.eevee.taa_render_samples = 30
     
-    # --- define the crop rectangle (0-1, lower-left origin) -----------
-    render.border_min_x = 0.12   # left   edge 
-    render.border_max_x = 0.885   # right  edge
-    render.border_min_y = 0.44   # bottom edge 
-    render.border_max_y = 0.63   # top    edge
+    # initial borders (0–1, origin bottom-left)
+    render.border_min_x, render.border_max_x = 0.12, 0.884
+    render.border_min_y, render.border_max_y = 0.44, 0.64
+
+    # make sure cropped size is divisible by 2 (required by FFmpeg/H.264)
+    res_x, res_y = render.resolution_x, render.resolution_y
+    if int((render.border_max_x - render.border_min_x) * res_x) & 1:
+        render.border_max_x += 1 / res_x          # add 1 pixel
+    if int((render.border_max_y - render.border_min_y) * res_y) & 1:
+        render.border_max_y += 1 / res_y          # (height already OK here)
+
 
     # --- turn it on ----------------------------------------------------
     render.use_border        = True    # draw/render only the region
@@ -127,8 +133,6 @@ def render_to_video(
     sc = bpy.context.scene
     render = sc.render
 
-    set_crop_rectangle(sc, render)
-
     sc.frame_start = start_frame
     sc.frame_end = end_frame
 
@@ -151,6 +155,10 @@ def render_to_video(
     render.ffmpeg.audio_codec = "AAC"
     render.ffmpeg.audio_bitrate = 192  # kb/s stereo
     render.ffmpeg.audio_channels = "STEREO"
+    
+    set_crop_rectangle(sc, render)
+    make_crop_even(sc, render)
+    
 
     # make sure directory exists
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -160,6 +168,28 @@ def render_to_video(
     bpy_render_with_surpressed_logs(animation=True)
     if verbose:
         print(f"▶  Rendering finished, saved to {output_path}")
+        
+def make_crop_even(sc, render):
+    res_x = render.resolution_x * render.resolution_percentage / 100
+    res_y = render.resolution_y * render.resolution_percentage / 100
+
+    # current pixel bounds
+    left   = round(render.border_min_x * res_x)
+    right  = round(render.border_max_x * res_x)
+    bottom = round(render.border_min_y * res_y)
+    top    = round(render.border_max_y * res_y)
+
+    # force even width/height
+    if (right - left) % 2:
+        right -= 1                       # or left += 1
+    if (top - bottom) % 2:
+        top  -= 1
+
+    # back to 0-1 range
+    render.border_min_x = left  / res_x
+    render.border_max_x = right / res_x
+    render.border_min_y = bottom / res_y
+    render.border_max_y = top   / res_y
 
 
 def set_interpolation(interpolation: str) -> None:
