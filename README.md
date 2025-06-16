@@ -1,5 +1,8 @@
-## Installing packages in Blender on Linux
+# Setup 
 
+Install uv: https://docs.astral.sh/uv/
+Then `uv sync`.
+A detailed description of all scripts is in scripts/
 
 # Run script on Linux
 
@@ -19,7 +22,7 @@ Then do
 ```
 
 
-## Run script
+## Run rendering script
 
 ```bash
 PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python midi_to_piano/render.py -- -m data/bach-1.mid -o generated_data
