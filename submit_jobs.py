@@ -9,7 +9,7 @@ Usage:
     uv run submit_jobs.py -M <midi_dir> -o <output_dir> -b <blender_path>
 
 Example:
-    uv run submit_jobs.py -M data/maestro_bach/ -o bach -b /home/wiss/koepa/code/piano-videos-dataset/blender-4.4.3-linux-x64/blender
+    uv run submit_jobs.py -M data/maestro-v3.0.0 -o /storage/user/koepa/pianovision/maestro-visualized-new -b /home/wiss/koepa/code/piano-videos-dataset/blender-4.4.3-linux-x64/blender
 """
 
 import argparse
@@ -21,17 +21,17 @@ from pathlib import Path
 CURRENT_USER = os.getenv("USER")
 
 
-def create_sbatch_script(midi_dir, output_dir, BLENDER_PATH):
+def create_sbatch_script(midi_dir, output_dir, job_name, BLENDER_PATH):
     """Create the sbatch script content."""
     script_content = f'''#!/bin/bash
-#SBATCH --job-name="{output_dir.split("/")[-1]}_renders"
+#SBATCH --job-name="{job_name}"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=felix.wu@tum.de
 #SBATCH --mem=16G
-#SBATCH --time=180:00:00
+#SBATCH --time=120:00:00
 #SBATCH --output=/storage/user/{CURRENT_USER}/slurm/logs/slurm-%j.out
 #SBATCH --error=/storage/user/{CURRENT_USER}/slurm/logs/slurm-%j.out
 #SBATCH --nodelist=node11,node12,node13,node14,node15,node16,node17,node18,node19
@@ -47,7 +47,10 @@ PYTHONPATH=/home/stud/{CURRENT_USER}/repos/piano-videos-dataset:$PYTHONPATH \\
   --python midi_to_piano/render.py \\
   -- \\
   -m {midi_dir} \\
-  -o {output_dir}
+  -o {output_dir} \\
+  -r video \\
+  -v True \\
+  -a True
 '''
     return script_content
 
@@ -64,9 +67,13 @@ def submit_job(script_content, job_name):
 
     # Submit the job
     result = subprocess.run(["sbatch", script_path], capture_output=True, text=True)
-
-    # Clean up the temporary script
-    os.remove(script_path)
+    # result is something like `Submitted batch job 1406202`
+    
+    if result.returncode != 0 or "Submitted batch job" not in result.stdout:
+        raise Exception(f"Error submitting job for {job_name}: {result.stderr}\n{result.stdout}")
+    
+    # rename the file to the job id
+    os.rename(script_path, f"job_id_{result.stdout.strip().split(" ")[-1]}.sbatch") # e.g. 1406202.sbatch
 
     return result.stdout.strip()
 
@@ -89,7 +96,7 @@ def main():
         help="Single directory containing MIDI subdirectories to process",
     )
     parser.add_argument(
-        "-o", "--output-dir", required=False, help="Output directory for all renders"
+        "-o", "--output-dir", required=True, help="Output base directory for all renders"
     )
     parser.add_argument(
         "-b",
@@ -119,27 +126,27 @@ def main():
     else:
         midi_dirs = args.midi_dirs
 
+
+    # Create the sbatch script content
+    output_base_dir = Path(args.output_dir)
     # Create output subdirectories for each MIDI directory
     for midi_dir in midi_dirs:
         # Create a job name based on the directory name
-        job_name = Path(midi_dir).name
-
-        # Create the sbatch script content
-        output_dir = args.output_dir
-        if output_dir is None:
-            if "__" in midi_dir:  # pieces with two composers
-                output_dir = midi_dir.lower()
-            else:
-                output_dir = midi_dir.split("_")[-1].lower()
+        job_name = str(Path(midi_dir).absolute()).replace("/", "_").replace(" ", "_") + "_renders"
+        print(f"Processing {job_name}...")
+        
+        output_dir = output_base_dir / f"slurm_job_{job_name}"
 
         # Skip if output directory already exists
-        if os.path.exists(f"/storage/user/{CURRENT_USER}/{output_dir}"):
+        if os.path.exists(output_dir):
             print(f"Skipping {midi_dir} because {output_dir} already exists")
             continue
+        
 
         script_content = create_sbatch_script(
             midi_dir=midi_dir,
-            output_dir=f"/storage/user/{CURRENT_USER}/{output_dir}",
+            output_dir=output_dir,
+            job_name=job_name,
             BLENDER_PATH=args.blender_path,
         )
 

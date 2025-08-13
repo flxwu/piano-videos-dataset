@@ -167,7 +167,7 @@ def render_to_video(
         print(f"▶  Rendering {sc.frame_start}-{sc.frame_end} to {output_path}")
     bpy_render_with_surpressed_logs(animation=True)
     if verbose:
-        print(f"▶  Rendering finished, saved to {output_path}")
+        print(f"▶  Rendering finished, saved to {output_path}. Rendered {sc.frame_start}-{sc.frame_end} frames.")
         
 def make_crop_even(sc, render):
     res_x = render.resolution_x * render.resolution_percentage / 100

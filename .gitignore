@@ -21,3 +21,5 @@ overlays/
 logs.txt
 blender-4.4.3-linux-x64/
 output_video.mp4
+temp_render/
+job_id_*.sbatch

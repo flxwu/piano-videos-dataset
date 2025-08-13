@@ -4,10 +4,11 @@ Piano + MIDI-driven animation
 Creates a full 88-key piano (A0-C8) and inserts keypress animations corresponding to a MIDI.
 
 Run using
-PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data
+PYTHONPATH=/home/stud/wfel/repos/piano-videos-dataset:$PYTHONPATH blender --python-use-system-env -b --python render.py -- -m data/bach-1.mid -o generated_data -v True -r video
 """
 
 import argparse
+from enum import Enum
 import os
 import pickle
 import sys
@@ -36,6 +37,13 @@ from midi_to_piano.utils import (
     set_interpolation,
     get_output_paths,
 )
+
+class RenderFormat(Enum):
+    """
+    Enum for the render format.
+    """
+    VIDEO = "video"
+    FRAMES = "frames"
 
 
 # -------------------------------------------------------------------
@@ -145,12 +153,6 @@ def animate_from_midi(
             while free_frame in used_frames[obj.name]:  # already keyed?
                 free_frame += 1  # bump one frame
             used_frames[obj.name].add(free_frame)  # reserve it
-            # ---------------------------------------------------------------
-
-            if verbose:
-                print(
-                    f"Frame {free_frame} (frame_before_rounding {current_sec * fps}): {obj_name} {'down' if on else 'up'}, note {msg.note}"
-                )
 
             # --- rotation key ----------------------------------------
             obj.delta_rotation_euler.x = math.radians(KEY_DOWN_DEG if on else 0)
@@ -169,10 +171,13 @@ def animate_from_midi(
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
-            if verbose:
-                print(
-                    f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}"
-                )
+            # if verbose:
+            #     print(
+            #         f"Frame {free_frame} (frame_before_rounding {current_sec * fps}): {obj_name} {'down' if on else 'up'}, note {msg.note}"
+            #     )
+            #     print(
+            #         f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}"
+            #     )
             notes[msg.note].append(NoteEvent(msg, on, free_frame))
 
     # sort notes[msg.note] by frame
@@ -234,8 +239,8 @@ def render_from_midi(
     highlight_presses=False,
     verbose=False,
     end_frame=None,
-    with_video=False,
-    with_audio=True,
+    render_format=RenderFormat.VIDEO,
+    with_audio=False,
 ):
     """Render a piano animation from a MIDI file to a video.
 
@@ -268,39 +273,40 @@ def render_from_midi(
     )
     synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
     new_midi.write(str(synthesized_midi_path))
+    
+        
+    # -- SAVE TRAINING DATA: Frames/Video, Labels (Piano Roll), Midi
+    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(
+        output_dir, midi_path
+    )
+    
     if with_audio:
         wav = midi_to_wav(
             midi_path=synthesized_midi_path,
             wav_path=curr_path
             / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav",
         )
-
-    if with_video:
         print(
             f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
         )
 
-        add_audio_strip(wav)
-        # add one extra frame at end to make sure the last note is visible
+    # 1. Save Frames/Video
+    if render_format == RenderFormat.FRAMES:
+        for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
+            render_to_frame_jpg(
+                # pad to 000000.jpg
+                output_path=frames_out_dir / f"{frame_nr:06d}.jpg",
+                frame_nr=frame_nr,
+                    verbose=verbose,
+                )
+    else:
+        if with_audio:
+            add_audio_strip(wav)
         render_to_video(
-            output_path=output_dir / "rendered_videos" / f"{midi_path.stem}.mp4",
+            output_path=frames_out_dir / f"{midi_path.stem}.mp4",
             fps=fps,
             start_frame=FIRST_FRAME,
-            end_frame=end_frame + 1,
-            verbose=verbose,
-        )
-
-    # -- SAVE TRAINING DATA: Frame Images, Labels (Piano Roll), Midi
-    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(
-        output_dir, midi_path
-    )
-
-    # 1. Save Frame Images
-    for frame_nr in tqdm(range(FIRST_FRAME, end_frame)):
-        render_to_frame_jpg(
-            # pad to 000001.jpg
-            output_path=frames_out_dir / f"{frame_nr:06d}.jpg",
-            frame_nr=frame_nr,
+            end_frame=end_frame,
             verbose=verbose,
         )
 
@@ -338,12 +344,13 @@ if __name__ == "__main__":
     print(
         f"[DEBUG]: {sys.version} | Executable {sys.executable} | Running in directory {os.getcwd()} | On Rendering Engine {bpy.context.scene.render.engine}"
     )
+    print(f"[DEBUG]: Command: {' '.join(sys.argv)}")
     parser = argparse.ArgumentParser(prog="midi-to-piano", description="midi-to-piano")
     parser.add_argument(
         "-m",
         "--midi_path",
         type=str,
-        help="Path to either a MIDI file, or a directory of MIDI files",
+        help="String: Path to either a MIDI file, or a directory of MIDI files",
         default=None,
         required=True,
     )
@@ -351,7 +358,7 @@ if __name__ == "__main__":
         "-f",
         "--fps",
         type=str,
-        help="FPS for the rendered video",
+        help="Integer: FPS for the rendered video",
         default=25,
         required=False,
     )
@@ -359,29 +366,32 @@ if __name__ == "__main__":
         "-o",
         "--output_dir",
         type=str,
-        help="Path to the output directory",
+        help="String: Path to the output directory",
         default=None,
         required=True,
     )
     parser.add_argument(
-        "-v", "--verbose", type=bool, help="Verbose mode", default=False, required=False
+        "-v", "--verbose", type=bool, help="Boolean: Verbose mode", default=False, required=False
     )
     parser.add_argument(
-        "-e", "--end_frame", type=int, help="End frame", default=None, required=False
+        "-e", "--end_frame", type=int, help="Integer: End frame", default=None, required=False
     )
     parser.add_argument(
-        "-w",
-        "--with_video",
-        type=bool,
-        help="Render video",
-        default=False,
-        required=False,
+        "-r", "--render_format", type=RenderFormat, help="Enum: 'video' for mp4 output, 'frames' for individual frames (frame_000000.jpg, frame_000001.jpg, ...)", default=RenderFormat.VIDEO, required=True
     )
     parser.add_argument(
         "-p",
         "--highlight_presses",
         type=bool,
-        help="Highlight presses",
+        help="Boolean: If True, the pressed keys will be highlighted in orange",
+        default=False,
+        required=False,
+    )
+    parser.add_argument(
+        "-a",
+        "--audio",
+        type=bool,
+        help="Boolean: If True, the audio will be added to the video",
         default=False,
         required=False,
     )
@@ -395,7 +405,8 @@ if __name__ == "__main__":
     VERBOSE = args.verbose
     END_FRAME = args.end_frame
     HIGHLIGHT_PRESS = args.highlight_presses
-    WITH_VIDEO = args.with_video
+    RENDER_FORMAT = args.render_format
+    WITH_AUDIO = args.audio
     if not MIDI_PATH.exists():
         raise FileNotFoundError(f"MIDI file not found: {MIDI_PATH}")
 
@@ -416,7 +427,8 @@ if __name__ == "__main__":
                 fps=FPS,
                 verbose=VERBOSE,
                 end_frame=END_FRAME,
-                with_video=WITH_VIDEO,
+                render_format=RENDER_FORMAT,
+                with_audio=WITH_AUDIO,
             )
             print(f"[INFO] Rendered {i+1}/{len(midi_files)} from directory {MIDI_PATH}")
     else:
@@ -427,5 +439,6 @@ if __name__ == "__main__":
             fps=FPS,
             verbose=VERBOSE,
             end_frame=END_FRAME,
-            with_video=WITH_VIDEO,
+            render_format=RENDER_FORMAT,
+            with_audio=WITH_AUDIO,
         )
