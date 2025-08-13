@@ -284,7 +284,7 @@ def render_from_midi(
         wav = midi_to_wav(
             midi_path=synthesized_midi_path,
             wav_path=curr_path
-            / f"temp_render/synthesized_{synthesized_midi_path.stem}.wav",
+            / f"temp_render/{synthesized_midi_path.stem}.wav",
         )
         print(
             f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
