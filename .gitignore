@@ -13,7 +13,8 @@ wheels/
 .venv
 
 renders/
-maestro-v3.0.0/
+data/maestro-v3.0.0/**/*.wav
+data/maestro-v3.0.0/**/*.midi
 generated_data/
 generated_data_attempt_0/
 overlays/
