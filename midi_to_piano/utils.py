@@ -9,17 +9,18 @@ import sys
 import bpy  # type: ignore # pylint: disable=import-error
 from mathutils import Euler  # type: ignore # pylint: disable=import-error # https://docs.blender.org/api/current/mathutils.html
 
-def get_output_paths(output_dir: Path, midi_path: Path) -> tuple[Path, Path, Path]:
-    frames_out_dir = output_dir / "input_images" / midi_path.stem
-    midi_npzs_out_dir = output_dir / "midi" / midi_path.stem
-    labels_out_dir = output_dir / "labels"
+def get_output_paths(output_dir: Path, midi_path: Path) -> tuple[Path, Path, Path, Path]:
+    frames_out_dir = output_dir / "videos" / midi_path.stem
+    labels_out_dir = output_dir / "annotations" / midi_path.stem
+    midi_out_dir = output_dir / "midi" / midi_path.stem
+    wav_out_dir = output_dir / "audio" / midi_path.stem
+    
     frames_out_dir.mkdir(parents=True, exist_ok=True)
-    midi_npzs_out_dir.mkdir(parents=True, exist_ok=True)
     labels_out_dir.mkdir(parents=True, exist_ok=True)
+    midi_out_dir.mkdir(parents=True, exist_ok=True)
+    wav_out_dir.mkdir(parents=True, exist_ok=True)
     
-    labels_pkl_path = labels_out_dir / f"{midi_path.stem}.pkl"
-    
-    return frames_out_dir, midi_npzs_out_dir, labels_pkl_path
+    return frames_out_dir, labels_out_dir, midi_out_dir, wav_out_dir
 
 
 def camera(location, rotation):

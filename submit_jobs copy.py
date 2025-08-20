@@ -1,31 +1,28 @@
 #!/usr/bin/env python3
 
 """
-Submit jobs to the SLURM cluster for Maestro dataset processing.
+Submit jobs to the SLURM cluster.
 
 Usage:
-    uv run submit_jobs.py -c <csv_path> -o <output_dir> -b <blender_path>
+    uv run submit_jobs.py -m <list_of_midi_dirs> -o <output_dir> -b <blender_path>
+    or
+    uv run submit_jobs.py -M <midi_dir> -o <output_dir> -b <blender_path>
 
 Example:
-    uv run submit_jobs.py -c data/maestro-v3.0.0/maestro-v3.0.0.csv -o /storage/user/koepa/pianovision/maestro-visualized-new -b /home/wiss/koepa/code/piano-videos-dataset/blender-4.4.3-linux-x64/blender
+    uv run submit_jobs.py -M data/maestro-v3.0.0 -o /storage/user/koepa/pianovision/maestro-visualized-new -b /home/wiss/koepa/code/piano-videos-dataset/blender-4.4.3-linux-x64/blender
 """
 
 import argparse
 import subprocess
 import os
-import csv
 from pathlib import Path
-from collections import defaultdict
 
 # Get current user
 CURRENT_USER = os.getenv("USER")
 
 
-def create_sbatch_script(midi_files, output_dir, job_name, BLENDER_PATH):
+def create_sbatch_script(midi_dir, output_dir, job_name, BLENDER_PATH):
     """Create the sbatch script content."""
-    # Convert list of MIDI files to space-separated string
-    midi_files_str = " ".join(midi_files)
-    
     script_content = f'''#!/bin/bash
 #SBATCH --job-name="{job_name}"
 #SBATCH --nodes=1
@@ -49,7 +46,7 @@ PYTHONPATH=/home/stud/{CURRENT_USER}/repos/piano-videos-dataset:$PYTHONPATH \\
   -b \\
   --python midi_to_piano/render.py \\
   -- \\
-  -m {midi_files_str} \\
+  -m {midi_dir} \\
   -o {output_dir} \\
   -r video \\
   -v True
@@ -80,31 +77,22 @@ def submit_job(script_content, job_name):
     return result.stdout.strip()
 
 
-def read_maestro_csv(csv_path):
-    """Read the Maestro CSV file and group MIDI files by worker_id."""
-    worker_midi_files = defaultdict(list)
-    
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            worker_id = int(row['worker_id'])
-            midi_filename = row['midi_filename']
-            # Construct full path to MIDI file
-            midi_path = f"data/maestro-v3.0.0/{midi_filename}"
-            worker_midi_files[worker_id].append(midi_path)
-    
-    return worker_midi_files
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Submit multiple piano video rendering jobs for Maestro dataset"
+        description="Submit multiple piano video rendering jobs"
     )
     parser.add_argument(
-        "-c",
-        "--csv-path",
-        required=True,
-        help="Path to the Maestro CSV file (e.g., data/maestro-v3.0.0/maestro-v3.0.0.csv)",
+        "-m",
+        "--midi-dirs",
+        nargs="+",
+        required=False,
+        help="List of MIDI directories to process",
+    )
+    parser.add_argument(
+        "-M",
+        "--midi-dir",
+        required=False,
+        help="Single directory containing MIDI subdirectories to process",
     )
     parser.add_argument(
         "-o", "--output-dir", required=True, help="Output base directory for all renders"
@@ -118,31 +106,44 @@ def main():
 
     args = parser.parse_args()
 
-    # Read the CSV file and group MIDI files by worker_id
-    print(f"Reading Maestro CSV file: {args.csv_path}")
-    worker_midi_files = read_maestro_csv(args.csv_path)
-    
-    print(f"Found {len(worker_midi_files)} workers with MIDI files:")
-    for worker_id, midi_files in worker_midi_files.items():
-        print(f"  Worker {worker_id}: {len(midi_files)} MIDI files")
+    # Check that either midi-dirs or midi-dir is provided
+    if not args.midi_dirs and not args.midi_dir:
+        print("Error: Either --midi-dirs or --midi-dir must be provided")
+        return
 
-    # Create the sbatch script content for each worker
+    # Get list of MIDI directories
+    if args.midi_dir:
+        # Get all non-empty subdirectories from the provided directory
+        midi_dirs = [
+            str(d)
+            for d in Path(args.midi_dir).iterdir()
+            if d.is_dir() and any(d.iterdir())
+        ]
+        if not midi_dirs:
+            print(f"Error: No subdirectories found in {args.midi_dir}")
+            return
+    else:
+        midi_dirs = args.midi_dirs
+
+
+    # Create the sbatch script content
     output_base_dir = Path(args.output_dir)
-    
-    for worker_id, midi_files in worker_midi_files.items():
-        # Create a job name based on the worker_id
-        job_name = f"maestro_worker_{worker_id}_renders"
-        print(f"Processing {job_name} with {len(midi_files)} MIDI files...")
+    # Create output subdirectories for each MIDI directory
+    for midi_dir in midi_dirs:
+        # Create a job name based on the directory name
+        job_name = str(Path(midi_dir).absolute()).replace("/", "_").replace(" ", "_") + "_renders"
+        print(f"Processing {job_name}...")
         
-        output_dir = output_base_dir / f"worker_{worker_id}"
+        output_dir = output_base_dir / f"slurm_job_{job_name}"
 
         # Skip if output directory already exists
         if os.path.exists(output_dir):
-            print(f"Skipping worker {worker_id} because {output_dir} already exists")
+            print(f"Skipping {midi_dir} because {output_dir} already exists")
             continue
+        
 
         script_content = create_sbatch_script(
-            midi_files=midi_files,
+            midi_dir=midi_dir,
             output_dir=output_dir,
             job_name=job_name,
             BLENDER_PATH=args.blender_path,
@@ -150,7 +151,7 @@ def main():
 
         # Submit the job
         result = submit_job(script_content, job_name)
-        print(f"Submitted job for worker {worker_id} -> {output_dir}")
+        print(f"Submitted job for {midi_dir} -> {output_dir}")
         print(f"Job submission result: {result}")
 
 

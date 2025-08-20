@@ -2,12 +2,12 @@
 """
 Utility script for overlaying a label-pkl for one MIDI on the generated frame images for that MIDI.
 
---input_dir: Path to the directory containing the generated frame images. (input_images/midi_name)
---pkl: Path to the label-pkl file. (labels/midi_name.pkl)
+--input_mp4: Path to the mp4 file. (videos/midi_name.mp4)
+--npz: Path to the label-npz file. (labels/midi_name.npz)
 --output_dir: Path to the directory to save the overlayed images. (overlays/midi_name)
 
 Usage:
-uv run python scripts/overlay_labels_on_images.py --input_dir=/storage/user/koepa/pianovision/final_data/input_images/video_1 --pkl=/storage/user/koepa/pianovision/final_data/labels/video_1.pkl --output_dir overlays
+uv run python scripts/overlay_labels_on_images.py --input_mp4=/storage/user/koepa/pianovision/final_data/videos/video_1.mp4 --npz=/storage/user/koepa/pianovision/final_data/labels/video_1.npz --output_dir overlays
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import argparse
 from pathlib import Path
 from typing import Tuple
 import pickle
-
+import cv2
 import numpy as np
 import numpy.typing as npt
 from PIL import Image, ImageDraw, ImageFont
@@ -139,40 +139,69 @@ def parse_args() -> argparse.Namespace:
         epilog="Example: python overlay_array_on_image.py photo.jpg data.npy annotated.jpg",
     )
     parser.add_argument(
-        "-i", "--input_dir", type=Path, help="Input JPG image path", required=True
+        "-i", "--input_mp4", type=Path, help="Input JPG image path", required=True
     )
     parser.add_argument(
         "-o", "--output_dir", type=Path, help="Output JPG image path", required=True
     )
     parser.add_argument(
-        "-p", "--pkl", type=Path, help="Path to .pkl file", required=True
+        "-n", "--npz", type=Path, help="Path to .npz file", required=True
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    pkl_path = Path(args.pkl)
-    input_dir_path = Path(args.input_dir)
+    npz_path = Path(args.npz)
+    input_mp4_path = Path(args.input_mp4)
     output_dir_path = Path(args.output_dir)
     output_dir_path.mkdir(parents=True, exist_ok=True)
-    if not pkl_path.exists():
-        raise FileNotFoundError(f"File {pkl_path} does not exist")
-    if not input_dir_path.exists() or not input_dir_path.is_dir():
+    if not npz_path.exists():
+        raise FileNotFoundError(f"File {npz_path} does not exist")
+    if not input_mp4_path.exists() or not input_mp4_path.is_file():
         raise FileNotFoundError(
-            f"Directory {input_dir_path} does not exist or is not a directory"
+            f"File {input_mp4_path} does not exist or is not a file"
         )
-    with open(args.pkl, "rb") as f:
-        data: dict[int, npt.NDArray[np.int_]] = pickle.load(f)
-        for i in data.keys():
-            arr = data[i]  # Array of length 88
-
-            overlay_array(
-                # e.g. input_images/twinkle/0.jpg
-                image_path=input_dir_path / f"frame_{i:06d}.jpg",
-                array=arr,
-                output_path=output_dir_path / Path(f"annotated_frame_{i:06d}.jpg"),
-            )
+    
+    # Extract frames from mp4 file
+    cap = cv2.VideoCapture(str(input_mp4_path))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps != 25:
+        print(f"Warning: Video FPS is {fps}, expected 25")
+    
+    # Load the npz data
+    with np.load(args.npz) as data:
+        frame_idx = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Convert BGR to RGB (OpenCV uses BGR by default)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Save frame as temporary image
+            temp_frame_path = output_dir_path / f"temp_frame_{frame_idx:06d}.jpg"
+            Image.fromarray(frame_rgb).save(temp_frame_path)
+            
+            # Get corresponding label data if it exists
+            if str(frame_idx) in data:
+                arr = data[str(frame_idx)]  # Array of length 88
+                
+                overlay_array(
+                    image_path=temp_frame_path,
+                    array=arr,
+                    output_path=output_dir_path / f"annotated_frame_{frame_idx:06d}.jpg",
+                )
+                
+                # Remove temporary frame
+                temp_frame_path.unlink()
+            else:
+                print(f"Warning: No label data for frame {frame_idx}")
+                
+            frame_idx += 1
+    
+    cap.release()
 
 
 if __name__ == "__main__":

@@ -266,29 +266,19 @@ def render_from_midi(
         verbose=verbose,
     )
     end_frame = end_frame or animation_result.end_frame
-    new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
-    curr_path = Path(os.path.abspath(__file__)).parent
-    synthesized_midi_path = (
-        curr_path / f"temp_render/synthesized_{midi_path.stem}.mid"
-    )
-    synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-    new_midi.write(str(synthesized_midi_path))
     
         
     # -- SAVE TRAINING DATA: Frames/Video, Labels (Piano Roll), Midi
-    frames_out_dir, midi_npzs_out_dir, labels_pkl_path = get_output_paths(
+    frames_out_dir, labels_out_dir, midi_out_dir, wav_out_dir = get_output_paths(
         output_dir, midi_path
     )
-    
-    if with_audio:
-        wav = midi_to_wav(
-            midi_path=synthesized_midi_path,
-            wav_path=curr_path
-            / f"temp_render/{synthesized_midi_path.stem}.wav",
-        )
-        print(
-            f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
-        )
+
+    new_midi: pretty_midi.PrettyMIDI = animation_result.synthesize_new_midi()
+    synthesized_midi_path = (
+        midi_out_dir / f"synthesized_{midi_path.stem}.mid"
+    )
+    synthesized_midi_path.parent.mkdir(parents=True, exist_ok=True)
+    new_midi.write(str(synthesized_midi_path))
 
     # 1. Save Frames/Video
     if render_format == RenderFormat.FRAMES:
@@ -301,6 +291,13 @@ def render_from_midi(
                 )
     else:
         if with_audio:
+            wav = midi_to_wav(
+                midi_path=synthesized_midi_path,
+                wav_path=wav_out_dir / f"{synthesized_midi_path.stem}.wav",
+            )
+            print(
+                f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
+            )
             add_audio_strip(wav)
         render_to_video(
             output_path=frames_out_dir / f"{midi_path.stem}.mp4",
@@ -320,24 +317,9 @@ def render_from_midi(
     label_dict: dict[int, npt.NDArray[np.int_]] = (
         animation_result.get_frames_to_notes_pressed()
     )
-    # Save labels in pickle format
-    with open(labels_pkl_path, "wb") as f:
-        pickle.dump(label_dict, f)
-
-    # 3. Save MIDI files
-    # Process MIDI files - create NPZ files for every 50 frames
-    for i in range(0, len(label_dict.keys()), 50):
-        if i + 50 <= len(label_dict.keys()):
-            # Create a 50x88 array for the MIDI data
-            midi_data = np.zeros((50, 88), dtype=np.float64)
-            # Fill with the corresponding labels
-            for j in range(50):
-                if i + j < len(label_dict.keys()):
-                    midi_data[j] = label_dict[i + j]
-
-            # Save as NPZ file
-            npz_filename = f"{i}-{i + 50}.npz"
-            np.savez(str(midi_npzs_out_dir / npz_filename), midi=midi_data)
+    # Save labels in npz format (keys must be strings for kwargs expansion)
+    label_dict_str_keys = {str(frame): arr for frame, arr in label_dict.items()}
+    np.savez_compressed(labels_out_dir / f"{midi_path.stem}.npz", **label_dict_str_keys)
 
 
 if __name__ == "__main__":
@@ -350,7 +332,8 @@ if __name__ == "__main__":
         "-m",
         "--midi_path",
         type=str,
-        help="String: Path to either a MIDI file, or a directory of MIDI files",
+        nargs="+",
+        help="One or more MIDI file paths or directories.",
         default=None,
         required=True,
     )
@@ -399,7 +382,6 @@ if __name__ == "__main__":
         sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     )  # blender passes script arguments after "--"
     args = parser.parse_args(argv)
-    MIDI_PATH = Path(args.midi_path)
     OUTPUT_DIR = Path(args.output_dir)
     FPS = int(args.fps)
     VERBOSE = args.verbose
@@ -407,33 +389,39 @@ if __name__ == "__main__":
     HIGHLIGHT_PRESS = args.highlight_presses
     RENDER_FORMAT = args.render_format
     WITH_AUDIO = args.audio
-    if not MIDI_PATH.exists():
-        raise FileNotFoundError(f"MIDI file not found: {MIDI_PATH}")
 
     if not OUTPUT_DIR.exists() or not OUTPUT_DIR.is_dir():
         raise FileNotFoundError(f"Output directory not found: {OUTPUT_DIR}")
 
-    if MIDI_PATH.is_dir():
-        midi_files = list(MIDI_PATH.glob("*.midi"))
-        for i, midi_file in enumerate(midi_files):
-            _, _, labels_pkl_path = get_output_paths(OUTPUT_DIR, midi_file)
-            if labels_pkl_path.exists():
-                print(f"[INFO] Skipping {midi_file} because labels already exist")
-                continue
-            render_from_midi(
-                midi_path=midi_file,
-                output_dir=OUTPUT_DIR,
-                highlight_presses=HIGHLIGHT_PRESS,
-                fps=FPS,
-                verbose=VERBOSE,
-                end_frame=END_FRAME,
-                render_format=RENDER_FORMAT,
-                with_audio=WITH_AUDIO,
-            )
-            print(f"[INFO] Rendered {i+1}/{len(midi_files)} from directory {MIDI_PATH}")
-    else:
+    # Collect MIDI inputs from provided list
+    raw_midi_args = args.midi_path if isinstance(args.midi_path, list) else [args.midi_path]
+    midi_inputs = [Path(str(entry)) for entry in raw_midi_args]
+
+    # Validate inputs exist
+    missing_inputs = [p for p in midi_inputs if not p.exists()]
+    if missing_inputs:
+        raise FileNotFoundError(f"MIDI path(s) not found: {', '.join(str(p) for p in missing_inputs)}")
+
+    # If the user passed directories, expand them into .midi and .mid files
+    midi_files: list[Path] = []
+    for p in midi_inputs:
+        if p.is_dir():
+            midi_files.extend(sorted(list(p.glob("*.midi")) + list(p.glob("*.mid"))))
+        else:
+            midi_files.append(p)
+
+    if not midi_files:
+        raise FileNotFoundError("No MIDI files found to process")
+
+    for i, midi_file in enumerate(midi_files):
+        _, labels_out_dir, _, _ = get_output_paths(OUTPUT_DIR, midi_file)
+        labels_npz_path = labels_out_dir / f"{midi_file.stem}.npz"
+        if labels_npz_path.exists():
+            print(f"[INFO] Skipping {midi_file} because labels already exist")
+            continue
+
         render_from_midi(
-            midi_path=MIDI_PATH,
+            midi_path=midi_file,
             output_dir=OUTPUT_DIR,
             highlight_presses=HIGHLIGHT_PRESS,
             fps=FPS,
@@ -442,3 +430,4 @@ if __name__ == "__main__":
             render_format=RENDER_FORMAT,
             with_audio=WITH_AUDIO,
         )
+        print(f"[INFO] Rendered {i+1}/{len(midi_files)}: {midi_file}")
