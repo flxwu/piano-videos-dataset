@@ -168,6 +168,30 @@ def main() -> None:
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps != 25:
         print(f"Warning: Video FPS is {fps}, expected 25")
+        
+    # First pass: count frames and check npz keys
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f"Video has {total_frames} frames")
+    
+    # Load npz to check keys
+    with np.load(args.npz) as data:
+        npz_keys = list(data.keys())
+        npz_frame_count = len(npz_keys)
+        print(f"NPZ file has {npz_frame_count} frame labels")
+        
+        if total_frames != npz_frame_count:
+            print(f"Warning: Frame count mismatch! Video: {total_frames}, NPZ: {npz_frame_count}")
+            
+        # Check if all frame indices are present
+        expected_keys = set(str(i) for i in range(total_frames))
+        actual_keys = set(npz_keys)
+        missing_keys = expected_keys - actual_keys
+        extra_keys = actual_keys - expected_keys
+        
+        if missing_keys:
+            print(f"Warning: Missing NPZ keys for frames: {sorted(missing_keys)[:10]}{'...' if len(missing_keys) > 10 else ''}")
+        if extra_keys:
+            print(f"Warning: Extra NPZ keys not matching video frames: {sorted(extra_keys)[:10]}{'...' if len(extra_keys) > 10 else ''}")
     
     # Load the npz data
     with np.load(args.npz) as data:

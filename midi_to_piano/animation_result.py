@@ -29,7 +29,7 @@ class AnimationResult:
         amount_frames = self.end_frame
         # initialize dict with amount_frames keys and a 88-entry array of 0s
         frames_to_notes_pressed: dict[int, npt.NDArray[np.int_]] = {
-            frame: np.zeros(88, dtype=np.int8) for frame in range(amount_frames)
+            frame: np.zeros(88, dtype=np.int8) for frame in range(amount_frames + 1)
         }
         for note_number in range(A0_MIDI, C8_MIDI + 1):
             events_for_note = self.events_for_note.get(note_number, [])

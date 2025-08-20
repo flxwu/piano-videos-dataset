@@ -431,3 +431,4 @@ if __name__ == "__main__":
             with_audio=WITH_AUDIO,
         )
         print(f"[INFO] Rendered {i+1}/{len(midi_files)}: {midi_file}")
+ 
