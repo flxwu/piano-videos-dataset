@@ -241,6 +241,7 @@ def render_from_midi(
     end_frame=None,
     render_format=RenderFormat.VIDEO,
     with_audio=False,
+    rerender_on_existing=True,
 ):
     """Render a piano animation from a MIDI file to a video.
 
@@ -299,13 +300,17 @@ def render_from_midi(
                 f"[INFO] Successfully saved synthesized MIDI to {synthesized_midi_path.name}"
             )
             add_audio_strip(wav)
-        render_to_video(
-            output_path=frames_out_dir / f"{midi_path.stem}.mp4",
-            fps=fps,
-            start_frame=FIRST_FRAME,
-            end_frame=end_frame,
-            verbose=verbose,
-        )
+        mp4_path = frames_out_dir / f"{midi_path.stem}.mp4"
+        if mp4_path.exists() and not rerender_on_existing:
+            print(f"[INFO] Not re-rendering {midi_path} because video {mp4_path} already exists")
+        else: 
+            render_to_video(
+                output_path=mp4_path,
+                fps=fps,
+                start_frame=FIRST_FRAME,
+                end_frame=end_frame,
+                verbose=verbose,
+            )
 
     # 2. Save Labels
     # binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
@@ -429,6 +434,7 @@ if __name__ == "__main__":
             end_frame=END_FRAME,
             render_format=RENDER_FORMAT,
             with_audio=WITH_AUDIO,
+            rerender_on_existing=False,
         )
         print(f"[INFO] Rendered {i+1}/{len(midi_files)}: {midi_file}")
  
