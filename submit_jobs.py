@@ -128,6 +128,9 @@ def main():
 
     # Create the sbatch script content for each worker
     output_base_dir = Path(args.output_dir)
+
+    # TEMP: Filter for workers
+    worker_midi_files = {k: v for k, v in worker_midi_files.items() if k in [6,7,8,9,14,15]}
     
     for worker_id, midi_files in worker_midi_files.items():
         # Create a job name based on the worker_id
@@ -135,11 +138,6 @@ def main():
         print(f"Processing {job_name} with {len(midi_files)} MIDI files...")
         
         output_dir = output_base_dir / f"worker_{worker_id}"
-
-        # Skip if output directory already exists
-        if os.path.exists(output_dir):
-            print(f"Skipping worker {worker_id} because {output_dir} already exists")
-            continue
 
         script_content = create_sbatch_script(
             midi_files=midi_files,
