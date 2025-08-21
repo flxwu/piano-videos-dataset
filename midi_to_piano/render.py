@@ -325,6 +325,7 @@ def render_from_midi(
     # Save labels in npz format (keys must be strings for kwargs expansion)
     label_dict_str_keys = {str(frame): arr for frame, arr in label_dict.items()}
     np.savez_compressed(labels_out_dir / f"{midi_path.stem}.npz", **label_dict_str_keys)
+    print(f"[INFO] Successfully saved labels to {labels_out_dir / f'{midi_path.stem}.npz'}")
 
 
 if __name__ == "__main__":
@@ -419,12 +420,6 @@ if __name__ == "__main__":
         raise FileNotFoundError("No MIDI files found to process")
 
     for i, midi_file in enumerate(midi_files):
-        _, labels_out_dir, _, _ = get_output_paths(OUTPUT_DIR, midi_file)
-        labels_npz_path = labels_out_dir / f"{midi_file.stem}.npz"
-        if labels_npz_path.exists():
-            print(f"[INFO] Skipping {midi_file} because labels already exist")
-            continue
-
         render_from_midi(
             midi_path=midi_file,
             output_dir=OUTPUT_DIR,

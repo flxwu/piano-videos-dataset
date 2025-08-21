@@ -19,7 +19,7 @@ PIANO_KEYS = [
 ]  # fmt: skip
 
 MIDI_PATH = Path(
-    "/home/wiss/koepa/code/piano-videos-dataset/data/maestro-v3.0.0/2008/MIDI-Unprocessed_01_R1_2008_01-04_ORIG_MID--AUDIO_01_R1_2008_wav--1.midi"
+    "/home/stud/wfel/repos/piano-videos-dataset/data/maestro-v3.0.0/2017/MIDI-Unprocessed_043_PIANO043_MID--AUDIO-split_07-06-17_Piano-e_1-03_wav--4.midi"
 )
 
 midi_file = mido.MidiFile(MIDI_PATH)
@@ -32,7 +32,9 @@ for msg in midi_file:
         events.append((abs_time, msg))
 
 for event in events:
+    if event[1].note != 96:
+        continue
     if event[1].type == "note_on" and event[1].velocity > 0:
-        print(f"{PIANO_KEYS[event[1].note - 21]} ({event[1].note}) on at {event[0]}")
+        print(f"{PIANO_KEYS[event[1].note - 21]} ({event[1]}) on at {event[0]}")
     else:
-        print(f"{PIANO_KEYS[event[1].note - 21]} ({event[1].note}) off at {event[0]}")
+        print(f"{PIANO_KEYS[event[1].note - 21]} ({event[1]}) off at {event[0]}")

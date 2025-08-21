@@ -130,7 +130,7 @@ def main():
     output_base_dir = Path(args.output_dir)
 
     # TEMP: Filter for workers
-    worker_midi_files = {k: v for k, v in worker_midi_files.items() if k in [6,7,8,9,14,15]}
+    worker_midi_files = {k: v for k, v in worker_midi_files.items() if k in list(range(0,9))}
     
     for worker_id, midi_files in worker_midi_files.items():
         # Create a job name based on the worker_id

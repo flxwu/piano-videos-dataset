@@ -183,8 +183,8 @@ def main() -> None:
             print(f"Warning: Frame count mismatch! Video: {total_frames}, NPZ: {npz_frame_count}")
             
         # Check if all frame indices are present
-        expected_keys = set(str(i) for i in range(total_frames))
-        actual_keys = set(npz_keys)
+        expected_keys = set(i for i in range(total_frames))
+        actual_keys = set(int(k) for k in npz_keys)
         missing_keys = expected_keys - actual_keys
         extra_keys = actual_keys - expected_keys
         

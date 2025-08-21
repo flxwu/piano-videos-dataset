@@ -45,18 +45,22 @@ class AnimationResult:
             while i < len(events_for_note):
                 event = events_for_note[i]
                 if event.on:
-                    next_event = events_for_note[i + 1]
-                    # next_event should be off
-                    if next_event.on:
-                        raise ValueError(
-                            f"Next event for note {note_number} is an on event"
-                        )
+                    # search for next off event
+                    next_event = None
+                    for j in range(i + 1, len(events_for_note)):
+                        if not events_for_note[j].on:
+                            next_event = events_for_note[j]
+                            break
+                    if next_event is None:
+                        raise ValueError(f"No off event found for note {note_number}")
                     # set frames_to_notes_pressed[frame][note_number - A0_MIDI] = 1
                     # for all frames between event.frame and next_event.frame
                     for frame in range(event.frame, next_event.frame):
                         frames_to_notes_pressed[frame][note_number - A0_MIDI] = 1
                         # print(f"[NUMPY LABELS] Adding note {note_number} at frame {frame}")
-                i += 1
+                    i = j + 1
+                else:
+                    i += 1
 
         # convert to numpy array
         for frame, notes_pressed in frames_to_notes_pressed.items():
