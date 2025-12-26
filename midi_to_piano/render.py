@@ -26,7 +26,6 @@ import pretty_midi  # type: ignore
 
 from midi_to_piano.animation_result import AnimationResult
 from midi_to_piano.blender_utils import clear_scene
-from midi_to_piano.generate_labels import midi_to_binary_roll
 from midi_to_piano.note_event import NoteEvent
 from midi_to_piano.piano_rendering import create_piano
 from midi_to_piano.utils import (
@@ -124,8 +123,6 @@ def animate_from_midi(
     mid = mido.MidiFile(midi_path)
     bpy.context.scene.render.fps = fps
 
-    # TODO: THIS ONLY WORKS FOR MIDI FILES WITH A SINGLE TRACK
-
     current_sec = 0.0
     last_frame = FIRST_FRAME
 
@@ -171,13 +168,13 @@ def animate_from_midi(
             # Add the note to the list of notes
             if msg.note not in notes:
                 notes[msg.note] = []
-            # if verbose:
-            #     print(
-            #         f"Frame {free_frame} (frame_before_rounding {current_sec * fps}): {obj_name} {'down' if on else 'up'}, note {msg.note}"
-            #     )
-            #     print(
-            #         f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}"
-            #     )
+            if verbose:
+                print(
+                    f"Frame {free_frame} (frame_before_rounding {current_sec * fps}): {obj_name} {'down' if on else 'up'}, note {msg.note}"
+                )
+                print(
+                    f"Adding note {msg.note} {'down' if on else 'up'} at frame {free_frame}"
+                )
             notes[msg.note].append(NoteEvent(msg, on, free_frame))
 
     # sort notes[msg.note] by frame
@@ -313,11 +310,6 @@ def render_from_midi(
             )
 
     # 2. Save Labels
-    # binary_roll = midi_to_binary_roll(new_midi, frames_per_second=fps)
-    # # Convert binary roll to dictionary format
-    # label_dict: dict[int, np.ndarray] = {}
-    # for i, roll in enumerate(binary_roll):
-    #     label_dict[i] = roll
 
     label_dict: dict[int, npt.NDArray[np.int_]] = (
         animation_result.get_frames_to_notes_pressed()
@@ -347,7 +339,7 @@ if __name__ == "__main__":
         "-f",
         "--fps",
         type=str,
-        help="Integer: FPS for the rendered video",
+        help="Integer: FPS for the rendered video, default: 25",
         default=25,
         required=False,
     )
@@ -363,7 +355,7 @@ if __name__ == "__main__":
         "-v", "--verbose", type=bool, help="Boolean: Verbose mode", default=False, required=False
     )
     parser.add_argument(
-        "-e", "--end_frame", type=int, help="Integer: End frame", default=None, required=False
+        "-e", "--end_frame", type=int, help="Integer: Last frame to render (if earlier than the end of the MIDI)", default=None, required=False
     )
     parser.add_argument(
         "-r", "--render_format", type=RenderFormat, help="Enum: 'video' for mp4 output, 'frames' for individual frames (frame_000000.jpg, frame_000001.jpg, ...)", default=RenderFormat.VIDEO, required=True

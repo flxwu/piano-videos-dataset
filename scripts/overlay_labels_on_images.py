@@ -2,12 +2,12 @@
 """
 Utility script for overlaying a label-pkl for one MIDI on the generated frame images for that MIDI.
 
---input_mp4: Path to the mp4 file. (videos/midi_name.mp4)
---npz: Path to the label-npz file. (labels/midi_name.npz)
+First arg: Path to the mp4 file. (videos/midi_name.mp4)
+Second arg: Path to the label-npz file. (labels/midi_name.npz)
 --output_dir: Path to the directory to save the overlayed images. (overlays/midi_name)
 
 Usage:
-uv run python scripts/overlay_labels_on_images.py --input_mp4=/storage/user/koepa/pianovision/final_data/videos/video_1.mp4 --npz=/storage/user/koepa/pianovision/final_data/labels/video_1.npz --output_dir overlays
+uv run python scripts/overlay_labels_on_images.py /storage/user/koepa/pianovision/final_data/videos/video_1.mp4 /storage/user/koepa/pianovision/final_data/labels/video_1.npz --output_dir overlays
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ PIANO_KEYS = [
 
 def load_font(font_size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     try:
-        return ImageFont.truetype("arial.ttf", font_size)
+        return ImageFont.truetype("overlay_font.ttf", font_size)
     except OSError:
         return ImageFont.load_default()
 
@@ -139,13 +139,13 @@ def parse_args() -> argparse.Namespace:
         epilog="Example: python overlay_array_on_image.py photo.jpg data.npy annotated.jpg",
     )
     parser.add_argument(
-        "-i", "--input_mp4", type=Path, help="Input JPG image path", required=True
+        "input_mp4", type=Path, help="Input MP4 video path"
+    )
+    parser.add_argument(
+        "npz", type=Path, help="Path to .npz file"
     )
     parser.add_argument(
         "-o", "--output_dir", type=Path, help="Output JPG image path", required=True
-    )
-    parser.add_argument(
-        "-n", "--npz", type=Path, help="Path to .npz file", required=True
     )
     return parser.parse_args()
 
@@ -167,7 +167,7 @@ def main() -> None:
     cap = cv2.VideoCapture(str(input_mp4_path))
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps != 25:
-        print(f"Warning: Video FPS is {fps}, expected 25")
+        raise ValueError(f"Video FPS is {fps}, expected 25")
         
     # First pass: count frames and check npz keys
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -199,6 +199,7 @@ def main() -> None:
         while True:
             ret, frame = cap.read()
             if not ret:
+                print(f"Warning: Failed to read frame {frame_idx}, stopping")
                 break
                 
             # Convert BGR to RGB (OpenCV uses BGR by default)
